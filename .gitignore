@@ -1,0 +1,46 @@
+# Byte-compiled / cached
+__pycache__/
+*.pyc
+*.pyo
+
+# Distribution / packaging
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+.env
+.envrc
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+
+# Coverage
+htmlcov/
+.coverage
+coverage.xml
+*.cover
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Documentation build output
+site/
+
+# Agent / local-only artifacts (not part of the project)
+CLAUDE.md
+PHASE_0_KICKOFF.md
+.claude/
+.aider*
+.cursor*
+.continue/
+*.local.md
