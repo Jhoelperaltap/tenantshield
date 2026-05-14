@@ -37,3 +37,24 @@ class PlainModel(models.Model):
 
     class Meta:
         app_label = "testapp"
+
+
+class ExistingCustomManager(models.Manager):
+    """Custom manager used to test @tenant_aware rejection of pre-existing managers."""
+
+
+class ModelWithCustomManagerForTest(models.Model):
+    """Model with a custom manager, deliberately NOT decorated with @tenant_aware.
+
+    Used by tests that verify the decorator detects pre-existing custom
+    managers and raises ``ConfigurationError`` instead of silently overwriting
+    them. The explicit ``objects`` declaration prevents Django from
+    auto-creating a plain Manager, so ``cls._meta.local_managers`` contains
+    only the custom one.
+    """
+
+    name = models.CharField(max_length=255)
+    objects = ExistingCustomManager()
+
+    class Meta:
+        app_label = "testapp"

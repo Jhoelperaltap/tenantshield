@@ -37,10 +37,13 @@ def _validate_tenant_coherence(
     tenant_field = default_registry.get(sender).tenant_field
     instance_tenant = getattr(instance, tenant_field, None)
 
-    if instance_tenant is None:
-        # Auto-fill on creation only (pk is None means the row has not been
-        # persisted). On update, a missing tenant_id is suspicious enough to
-        # surface as a cross-tenant access.
+    if not instance_tenant:
+        # Auto-fill: set the instance's tenant_id from the active context when
+        # missing. "Missing" includes None, "" (default for CharField without
+        # default=), 0, or any falsy value -- whatever Django defaults the
+        # field type to when the user did not specify a value. Only on
+        # creation (pk is None); on update, a falsy tenant_id is suspicious
+        # enough to surface as a cross-tenant access.
         if instance.pk is None:
             setattr(instance, tenant_field, ctx.tenant_id)
             return
