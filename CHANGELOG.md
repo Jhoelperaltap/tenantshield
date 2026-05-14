@@ -79,3 +79,14 @@ clarify statements in `PHASE_0_KICKOFF.md`:
   adapters like OpenTelemetry). Rejected alternatives: structlog in `[audit]`
   extra (friction, no clear benefit), structlog in `[dev]` only and forcing
   users to implement their own sink (hostile to adoption).
+- **DR-011** — `RequireScope.filter_spec` is typed as `Mapping[str, object]`
+  rather than a structured type (TypedDict, dataclass) in Sub-phase 1B.
+  Rationale: at this stage there are no adapter consumers to dictate
+  structure; imposing a schema now would either be too restrictive
+  (forcing a shape that doesn't fit Django's ORM filter dicts, SQLAlchemy's
+  clauses, Celery's task arguments) or too speculative. Adapters in Phase
+  2+ may define their own structured `FilterSpec` subtypes that remain
+  assignment-compatible with `Mapping[str, object]`. Rejected alternatives:
+  TypedDict in `policies.py` (premature; binds the structure to Sub-phase
+  1B's imagination), dataclass with concrete fields (even more rigid),
+  `Any` (loses any typing benefit).
