@@ -35,6 +35,8 @@ nav:
   - Concepts: concepts/index.md
   - API Reference: api/index.md
   - Adapters: adapters/index.md
+  - ADRs:
+    - "0001 - Commit signing deferral": adr/0001-commit-signing-deferral.md
 
 markdown_extensions:
   - admonition

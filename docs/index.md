@@ -13,6 +13,7 @@ SQLAlchemy, Celery, DRF) arrive in subsequent phases.
 - [Getting Started](getting-started.md) — install and run your first example.
 - [Concepts](concepts/index.md) — what each part of TenantShield does.
 - [API Reference](api/index.md) — full API documentation.
+- [ADRs](adr/0001-commit-signing-deferral.md) — architectural decisions.
 
 ## Why TenantShield?
 
