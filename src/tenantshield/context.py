@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from tenantshield._types import TenantId
+from tenantshield.audit import AuditEvent, AuditEventType, emit
 from tenantshield.exceptions import MissingTenantContextError
 
 if TYPE_CHECKING:
@@ -74,10 +75,12 @@ def tenant_scope(ctx: TenantContext) -> Generator[TenantContext, None, None]:
         ...     assert current_tenant() is ctx
     """
     token = _bind_and_token(ctx)
+    emit(AuditEvent(event_type=AuditEventType.CONTEXT_BOUND, tenant_context=ctx))
     try:
         yield ctx
     finally:
         _TENANT_CONTEXT.reset(token)
+        emit(AuditEvent(event_type=AuditEventType.CONTEXT_RELEASED, tenant_context=ctx))
 
 
 def current_tenant() -> TenantContext:
@@ -135,10 +138,12 @@ async def atenant_scope(ctx: TenantContext) -> AsyncGenerator[TenantContext, Non
         ...     assert current_tenant() is ctx
     """
     token = _bind_and_token(ctx)
+    emit(AuditEvent(event_type=AuditEventType.CONTEXT_BOUND, tenant_context=ctx))
     try:
         yield ctx
     finally:
         _TENANT_CONTEXT.reset(token)
+        emit(AuditEvent(event_type=AuditEventType.CONTEXT_RELEASED, tenant_context=ctx))
 
 
 __all__ = [
