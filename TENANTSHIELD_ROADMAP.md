@@ -3,9 +3,9 @@
 > **Documento de gobierno técnico del proyecto.**
 > Autoridad: Tech Lead (sesión de chat).
 > Ejecutor: Claude Code Console.
-> Estado: v1.3 — Consolidación post-Sub-fase 1B.
+> Estado: v1.4 — Consolidación post-Fase 1.
 > Última revisión: 2026-05-14.
-> Tag de proyecto al revisar: `v0.0.3-alpha.0` (Sub-fase 1B cerrada).
+> Tag de proyecto al revisar: `v0.1.0-alpha` (Fase 1 cerrada).
 
 Este documento define **qué se construye, cómo se construye, con qué calidad y en qué orden**. Cualquier desviación requiere justificación técnica documentada en el `CHANGELOG.md` bajo la sección `Decision Records`. No se acepta "lo hice así porque era más rápido". El código que no cumple los estándares de este documento **no entra a `main`**.
 
@@ -48,15 +48,15 @@ Este documento define **qué se construye, cómo se construye, con qué calidad 
 | Tests | **`pytest`**, **`pytest-asyncio`**, **`pytest-cov`**, **`hypothesis`** | Estándar de facto + property-based. |
 | Cobertura mínima | **95% líneas, 90% ramas** | No es decorativo: el CI falla por debajo. |
 | Seguridad estática | **`bandit`**, **`pip-audit`**, **`semgrep`** (semgrep llega en Fase 5) | Tres ángulos diferentes. |
-| Logging estructurado | **`structlog`** (dep base, DR-010) | Sustento de `AuditSink` built-in. Confirmado zero-dep transitiva al instalar. |
-| Docs | **`mkdocs-material`** + **`mkdocstrings`** | Generación desde docstrings tipados. Se monta en sub-fase 1C. |
-| Versionado | **SemVer 2.0.0** | Sin atajos. |
+| Logging estructurado | **`structlog`** (dep base, DR-010) | Sustento de `StructLogSink` built-in. Confirmado zero-dep transitiva. |
+| Docs | **`mkdocs-material`** + **`mkdocstrings[python]`** (dep `dev`, instalada en Sub-fase 1C) | Generación desde docstrings tipados. |
+| Versionado | **SemVer 2.0.0** | Sin atajos. Version y tag desync deliberado durante una fase, convergen al cierre. |
 | Mensajes de commit | **Conventional Commits** | Habilita changelog automático. |
 | CI | **GitHub Actions**, matriz `{3.11, 3.12, 3.13} × {django 4.2, 5.x} × {sqlalchemy 2.x}` (matriz multi-eje desde Fase 2) | |
 | Licencia | **Apache-2.0** | Permisiva con cláusula de patentes; apta para enterprise. |
 | Distribución | **PyPI** vía Trusted Publishing (OIDC, sin tokens) | |
 
-Cualquier propuesta de cambio sobre esta tabla se debate en un *Architecture Decision Record* (`docs/adr/NNNN-titulo.md`) antes de implementarse. La infraestructura `docs/adr/` se materializa en sub-fase 1C.
+Cualquier propuesta de cambio sobre esta tabla se debate en un *Architecture Decision Record* (`docs/adr/NNNN-titulo.md`) antes de implementarse. La infraestructura `docs/adr/` se materializó en Sub-fase 1C (ADR-0001).
 
 ---
 
@@ -79,32 +79,33 @@ tenantshield/
 ├── .pre-commit-config.yaml
 ├── .github/
 │   ├── workflows/
-│   │   ├── ci.yml
-│   │   ├── security.yml
-│   │   ├── bench.yml            (sub-fase 1C, ver §5 Sub-fase 1C)
-│   │   ├── release.yml          (Fase 8)
-│   │   └── docs.yml             (sub-fase 1C)
+│   │   ├── ci.yml                # ✅ Fase 0
+│   │   ├── security.yml          # ✅ Fase 0
+│   │   ├── docs.yml              # ✅ Sub-fase 1C
+│   │   ├── bench.yml             # ✅ Sub-fase 1C
+│   │   └── release.yml           # Fase 8
 │   ├── ISSUE_TEMPLATE/
 │   ├── PULL_REQUEST_TEMPLATE.md
 │   └── dependabot.yml
-├── docs/                         (sub-fase 1C)
+├── docs/                          # ✅ Sub-fase 1C
 │   ├── index.md
 │   ├── getting-started.md
 │   ├── concepts/
-│   ├── adapters/
-│   ├── adr/
-│   └── api/
+│   ├── adapters/                  # placeholder hoy, contenido en Fase 2+
+│   ├── api/
+│   └── adr/
+│       └── 0001-commit-signing-deferral.md
 ├── src/
 │   └── tenantshield/
-│       ├── __init__.py
+│       ├── __init__.py            # ✅ Fase 1, 44 nombres en __all__
 │       ├── py.typed
-│       ├── _version.py
-│       ├── _types.py              # ✅ sub-fase 1A
-│       ├── context.py             # ✅ sub-fase 1A, refinado sub-fase 1B
-│       ├── exceptions.py          # ✅ sub-fase 1A
-│       ├── audit.py               # ✅ sub-fase 1B
-│       ├── policies.py            # ✅ sub-fase 1B
-│       ├── registry.py            # sub-fase 1C
+│       ├── _version.py            # ✅ Fase 1, __version__ = "0.1.0a0"
+│       ├── _types.py              # ✅ Sub-fase 1A
+│       ├── context.py             # ✅ Sub-fase 1A, refinado Sub-fase 1B
+│       ├── exceptions.py          # ✅ Sub-fase 1A
+│       ├── audit.py               # ✅ Sub-fase 1B
+│       ├── policies.py            # ✅ Sub-fase 1B
+│       ├── registry.py            # ✅ Sub-fase 1C
 │       ├── config.py              # Fase 2+
 │       ├── adapters/              # Fase 2+
 │       │   ├── __init__.py
@@ -122,20 +123,20 @@ tenantshield/
 │           ├── factories.py
 │           └── generator.py
 └── tests/
-    ├── conftest.py               # fixtures globales (silent_audit, capture_audit; ampliable en 1C)
-    ├── unit/
-    ├── integration/              # Fase 2+
+    ├── conftest.py                # fixtures globales (silent_audit, capture_audit)
+    ├── unit/                      # ✅ Fase 1
+    ├── integration/               # Fase 2+
     │   ├── django/
     │   ├── sqlalchemy/
     │   └── celery/
-    └── e2e/                      # Fase 6
+    └── e2e/                       # Fase 6
 ```
 
 **Regla:** `src/`-layout obligatorio. No se permite importar desde el directorio raíz durante el desarrollo; los tests siempre corren contra el paquete instalado en modo editable.
 
 ---
 
-## 4. Arquitectura Core
+## 4. Arquitectura Core (Implementada en Fase 1)
 
 ### 4.1 Modelo conceptual
 
@@ -165,7 +166,15 @@ tenantshield/
 │Adapt.│    │ Adapter   │   │ Adapter │      │  Adapter  │
 └──────┘    └───────────┘   └─────────┘      └───────────┘
                   ▲
-                  │ (Phase 2+, consumes ModelRegistry from sub-phase 1C)
+                  │ (Phase 2+, consumes ModelRegistry from Sub-phase 1C)
+                  │
+            ┌─────┴──────────┐
+            │ ModelRegistry  │
+            │ - class + def. │
+            │   instance     │
+            │ - decorator    │
+            │ - thread-safe  │
+            └────────────────┘
 ```
 
 ### 4.2 Decisiones arquitectónicas clave
@@ -179,8 +188,8 @@ tenantshield/
   - `tenantshield[drf]`
   - `tenantshield[all]`
   - `tenantshield[dev]` (para contributors)
-- **`structlog` es dependencia base** (no extra). Razones documentadas en DR-010. `StructLogSink` siempre disponible al instalar `tenantshield`. Confirmado en Sub-fase 1B: structlog 25.5.0 instala sin deps transitivas adicionales.
-- **Sin import-time side effects.** Importar `tenantshield` no monkey-patchea nada. El usuario activa los adapters explícitamente. El registry global de sinks de auditoría **empieza vacío** — el usuario hace `register_sink(...)` cuando quiera observabilidad.
+- **`structlog` es dependencia base** (no extra). Razones documentadas en DR-010. `StructLogSink` siempre disponible al instalar `tenantshield`.
+- **Sin import-time side effects.** Importar `tenantshield` no monkey-patchea nada. El usuario activa los adapters explícitamente. El registro de sinks de auditoría **empieza vacío** — el usuario hace `register_sink(...)` cuando quiera observabilidad. El `default_registry` de modelos también **empieza vacío** — el usuario registra modelos explícitamente.
 - **Event bus síncrono y predecible.** No usamos un sistema pub/sub asíncrono por defecto; los eventos se emiten en línea y los sinks son responsables de no bloquear. Sinks que lanzan excepciones no rompen el bus (un evento `SINK_FAILURE` se emite a los otros sinks; el sink que falló se excluye para evitar recursión).
 - **Decision sealed-por-convención.** `Decision = Allow | Deny | RequireScope` con `match` exhaustivo y `assert_never(d)` en el caso final. mypy/pyright detectan exhaustividad. La forma `|` (PEP 604) es el patrón canónico del proyecto para union types con target Python 3.10+.
 
@@ -233,11 +242,25 @@ RequireScope(          # operación condicional a aplicación de filtro
 )
 ```
 
-**DR-011: `filter_spec` typing.** `RequireScope.filter_spec` es `Mapping[str, object]` libre. Los adapters de Fase 2+ pueden refinar con TypedDicts propios que sean asignación-compatibles con `Mapping[str, object]`. No imponemos schema en Sub-fase 1B porque no hay consumidor todavía.
+**DR-011: `filter_spec` typing.** `RequireScope.filter_spec` es `Mapping[str, object]` libre. Los adapters de Fase 2+ pueden refinar con TypedDicts propios que sean asignación-compatibles con `Mapping[str, object]`. No imponemos schema porque no había consumidor en Sub-fase 1B y sigue sin haberlo al cierre de Fase 1.
 
 **Composición:** `ChainPolicy(policies=(p1, p2, ...))` aplica políticas en orden. Primer `Deny` o `RequireScope` gana (short-circuit). Si todas retornan `Allow`, retorna `Allow`.
 
 **Helper `evaluate_and_audit(policy, operation)`:** evalúa + emite `POLICY_ALLOW` o `POLICY_DENY` al bus de auditoría según la decisión. `RequireScope` se trata como `POLICY_ALLOW` con el scope en el payload (es informacional, no denial).
+
+### 4.6 ModelRegistry (implementado en Sub-fase 1C)
+
+**Decisión arquitectónica (DR-012):** el registro de modelos tenant-aware se expone como una **clase `ModelRegistry`** con una **instancia global `default_registry`**, más funciones módulo-level de conveniencia (`register_model`, `is_tenant_aware`, `get_tenant_field`) que delegan a la instancia default.
+
+**Reglas vinculantes:**
+
+1. **Uso casual:** el usuario decora modelos con `@register_model` (sin paréntesis), `@register_model(tenant_field="x")` (con argumentos), o llama `register_model(Cls)` directamente. Todas las formas registran en `default_registry`.
+2. **Uso con aislamiento:** el usuario que necesita aislar registros (tests con scope local, microservicios embebidos en monorepo) construye su propia `ModelRegistry()` y la usa explícitamente. No comparte estado con `default_registry`.
+3. **Adapters de Fase 2+:** aceptan parámetro opcional `registry: ModelRegistry | None = None`. Si `None`, usan `default_registry`. Sin breaking change para el usuario casual.
+4. **Detección semántica:** `is_tenant_aware(cls)` consulta el registry. **No** se usa `isinstance` ni `issubclass` (no hay marker class por herencia). Esto evita acoplar al patrón de herencia múltiple, que es delicado con Django `Meta` abstract y SQLAlchemy `DeclarativeBase`.
+5. **Thread-safety:** todas las operaciones del registry (incluso queries de solo lectura) van bajo un `threading.RLock`. La iteración toma snapshot bajo lock. Cargas concurrentes son seguras.
+
+**Patrón decorador puro:** elegido (Decisión 2 del kickoff 1C) porque funciona idéntico contra Django, SQLAlchemy, Pydantic, dataclasses, NamedTuple, o plain class. Cero acoplamiento a herencia.
 
 ---
 
@@ -251,87 +274,45 @@ Cerrada el 2026-05-13 con tag `v0.0.1-alpha.0` en commit `b6262c6`. Documento de
 
 ---
 
-### Fase 1 — Núcleo (descompuesta en tres sub-fases)
+### Fase 1 — Núcleo ✅ COMPLETADA
 
-**Justificación de la descomposición (DR-008):** Fase 1 original era demasiado grande para tratarse como unidad operativa. Se descompone en tres sub-fases con entregables verificables independientes, cada una con su propio kickoff, sus propios criterios de aceptación, y su propio cierre.
+Cerrada el 2026-05-14 con tag `v0.1.0-alpha` en commit `fd8ee2d`. Documento de cierre consolidado: `PHASE_1_CLOSURE.md`. Detalles en `CHANGELOG.md`.
 
----
+Tres sub-fases consolidadas:
 
-#### Sub-fase 1A — Identidad y excepciones ✅ COMPLETADA
+| Sub-fase | Tag | Commit | Entregables |
+|---|---|---|---|
+| 1A | `v0.0.2-alpha.0` | `909d32d` | Identity (`TenantId`), exceptions (10 clases), context (sync + async) |
+| 1B | `v0.0.3-alpha.0` | `02667b8` | Audit bus (events, sinks, SINK_FAILURE handling), Policy engine (sealed Decision, 3 built-in policies, `evaluate_and_audit`) |
+| 1C | `v0.1.0-alpha` | `fd8ee2d` | ModelRegistry (class + default + decorator), mkdocs scaffold, ADR-0001, bench.yml workflow, version bump |
 
-Cerrada el 2026-05-14 con tag `v0.0.2-alpha.0` en commit `909d32d`. Documento de cierre: `PHASE_1A_CLOSURE.md`. Detalles en `CHANGELOG.md`.
+**Resumen consolidado:**
 
-**Resumen de entregas:**
-
-- `tenantshield._types`: `TenantId` (NewType sobre str).
-- `tenantshield.exceptions`: 10 clases de excepción con campos estructurados y `to_dict()`.
-- `tenantshield.context`: `TenantContext`, `tenant_scope` (sync), `atenant_scope` (async), `current_tenant`, `try_current_tenant`, `bind_tenant`.
-- `tenantshield.__init__`: superficie pública de 18 nombres.
-- 55 tests + 1 smoke benchmark con techo catastrófico.
-- 100% cobertura líneas/ramas en módulos productivos.
-
----
-
-#### Sub-fase 1B — Políticas y auditoría ✅ COMPLETADA
-
-Cerrada el 2026-05-14 con tag `v0.0.3-alpha.0` en commit `02667b8`. Documento de cierre: `PHASE_1B_CLOSURE.md`. Detalles en `CHANGELOG.md`.
-
-**Resumen de entregas:**
-
-- `tenantshield.audit`: `AuditEvent`, `AuditEventType` (StrEnum), `AuditSink` Protocol, sinks built-in (`NullSink`, `InMemorySink`, `StructLogSink`), registry thread-safe con `register_sink`/`unregister_sink`/`emit`, lógica `SINK_FAILURE` tolerante a fallos sin recursión infinita.
-- `tenantshield.policies`: `Operation`, `OperationType`, `Decision` (sealed-by-convention con `Allow | Deny | RequireScope`), `Policy` Protocol, tres policies built-in (`DenyByDefaultPolicy`, `AllowListPolicy`, `ChainPolicy`), helper `evaluate_and_audit`.
-- Modificación de `tenantshield.context`: `tenant_scope` y `atenant_scope` emiten `CONTEXT_BOUND`/`CONTEXT_RELEASED` al entrar/salir.
-- `tenantshield.__init__`: superficie pública expandida a 38 nombres; `emit` re-exportado como `audit_emit`.
-- Fixtures `silent_audit` y `capture_audit` en `tests/conftest.py` global.
-- 114 tests (de los 55 previos) + 2 smoke benchmarks con techo catastrófico.
-- 100% cobertura líneas/ramas en los 6 módulos productivos.
-- DR-010 (`structlog` como dep base) y DR-011 (`filter_spec` como `Mapping[str, object]` libre) registrados en CHANGELOG.
-
----
-
-#### Sub-fase 1C — Registro, documentación y cierre de Fase 1
-
-**Objetivo:** cerrar el núcleo de Fase 1 con el registro de modelos tenant-aware y montar la infraestructura mínima de documentación para que el proyecto pueda escalar.
-
-**Entregables:**
-
-- `tenantshield.registry`:
-  - `ModelRegistry`: registro tipado de modelos tenant-aware.
-  - `register_model(model: type, tenant_field: str = "tenant_id")` decorador y función.
-  - `is_tenant_aware(model: type) -> bool`.
-  - `get_tenant_field(model: type) -> str`.
-  - Descubrimiento opcional vía marker class `TenantAware` o decorador.
-  - **Aislamiento por aplicación**: dos proyectos que importen TenantShield no comparten registro. La decisión arquitectónica exacta (module-level dict, singleton class, ContextVar de registry) se fija en el kickoff de 1C tras dry-run.
-- Infraestructura `docs/`:
-  - `docs/index.md`, `docs/getting-started.md`, `docs/concepts/` (overview de los conceptos de Fase 1: identity, exceptions, context, policies, audit, registry), `docs/adapters/` (placeholder con README explicando que llega en Fase 2+), `docs/api/` (autogenerada con mkdocstrings).
-  - `docs/adr/0001-commit-signing-deferral.md` — materializa DR-003 como ADR formal.
-  - `mkdocs.yml` con tema Material y plugin `mkdocstrings`.
-  - **Alcance acotado para 1C** (decisión tentativa, confirmación en kickoff): scaffold + ADR-0001 + getting-started mínima + API reference autogenerada. Documentación expandida (guías profundas, ejemplos detallados, comparativas con otras librerías) se difiere a Fase 8 (hardening).
-- Workflows:
-  - `.github/workflows/docs.yml`: build de docs en cada PR, deploy a GitHub Pages en push a `main`.
-  - `.github/workflows/bench.yml`: job dedicado de benchmarks corriendo en CI Linux con los markers `slow` activados. Verifica los budgets estrictos del roadmap (`tenant_scope` < 1µs mediana, `emit()` < 10µs mediana sobre 10.000 iteraciones). **Materialización en 1C** (deferido desde 1A y 1B).
-- Actualización del `pyproject.toml`:
-  - `mkdocs-material` y `mkdocstrings[python]` añadidos al extra `dev`.
-- Bump de versión: `_version.py` → `__version__ = "0.1.0a0"`. Primer commit que toca esto sincroniza con el tag final de Fase 1.
-
-**Criterios de aceptación:**
-
-- 100% cobertura de líneas en `registry.py`, ≥ 95% ramas.
-- `mkdocs build --strict` pasa sin warnings.
-- Documentación generada incluye API reference completa de `context`, `exceptions`, `policies`, `audit`, `registry`.
-- ADR-0001 escrito y revisado.
-- Job `bench.yml` corre en CI Linux y los benchmarks pasan sus budgets estrictos (no solo el techo catastrófico local).
-- Los 47 tests pre-1C (de 1A) + 67 nuevos de 1B + tests de 1C siguen verdes.
-
-**DoD:** Tag `v0.1.0-alpha` aplicado. **Cierra Fase 1 completa.** Documento de cierre de Fase 1 consolidado (no solo de Sub-fase 1C).
+- Superficie pública: **44 nombres** en `tenantshield.__all__`. Contrato estable para Fase 2+.
+- Tests: **141 passing** + 2 smoke benchmarks deselected por default.
+- Cobertura: **100% líneas, 100% ramas** en los 7 módulos productivos.
+- Stmts productivos: **314**. Branches productivas: **32**.
+- Toolchain: ruff, mypy strict, pyright strict, bandit, pip-audit, pre-commit, mkdocs strict — todos verdes.
+- Dependencias: **77 resueltas, 0 vulnerabilidades activas**.
+- Decision Records acumulados al cierre: **12 (DR-001 a DR-012)**.
 
 ---
 
 ### Fase 2 — Adapter Django + DRF
 
-**Objetivo:** Enforcement total sobre Django ORM y DRF.
+**Objetivo:** Enforcement total sobre Django ORM y DRF. Primer adapter de framework — momento donde TenantShield deja de ser "motor puro Python" y se convierte en "motor + integración con ecosistema real".
 
-**Entregables:**
+**Estado actual:** kickoff pendiente. Descomposición en sub-fases sujeta a dry-run del Tech Lead.
+
+**Decisión preliminar sobre descomposición:** considerar 3 sub-fases:
+
+- **2A — Django ORM enforcement core.** TenantAwareManager/QuerySet, integración con `register_model`, validación de coherencia tenant en `pre_save`/`pre_delete`, detector de cross-tenant joins.
+- **2B — Middleware + extracción de tenant.** `TenantContextMiddleware` configurable (subdomain, header, JWT claim, callable). Integración con ciclo request/response.
+- **2C — DRF integration.** ViewSet mixin, permission class `IsSameTenant`, serializer hooks. Ejemplo runnable en `examples/01_django/`.
+
+La decisión real (descomposición vs monolítico) se fija en el kickoff de Fase 2 tras dry-run completo.
+
+**Entregables consolidados:**
 
 - `tenantshield.adapters.django.apps.TenantShieldConfig`: instalable como app de Django.
 - `TenantAwareManager` / `TenantAwareQuerySet`:
@@ -349,12 +330,19 @@ Cerrada el 2026-05-14 con tag `v0.0.3-alpha.0` en commit `02667b8`. Documento de
 **Criterios de aceptación:**
 
 - Test integration suite contra Django 4.2 LTS y 5.x.
-- Tests de regresión que reproducen los 5 patrones clásicos de leak (lista en `docs/concepts/known-leaks.md`).
+- **Matriz multi-versión activa**: Python 3.11/3.12/3.13 × Django 4.2/5.x. Resuelve deuda histórica desde Fase 0.
+- Tests de regresión que reproducen los 5 patrones clásicos de leak (lista en `docs/concepts/known-leaks.md` a redactar en Fase 2).
 - Bench: overhead de filtrado < 5% sobre query baseline.
 - `mypy --strict` pasa con `django-stubs` configurado.
 - DRF browsable API funcional en `examples/01_django/`.
 
-**DoD:** Tag `v0.2.0-alpha`. Aplicación demo desplegada en `examples/01_django/` con README de uso.
+**DoD:** Tag `v0.2.0-alpha`. Aplicación demo desplegada en `examples/01_django/` con README de uso. Documento de cierre `PHASE_2_CLOSURE.md`.
+
+**Prerrequisitos antes del kickoff de Fase 2:**
+
+1. Roadmap v1.4 commiteado (este documento) — resuelve enmiendas E20-E23 y registra DR-012.
+2. Workflow `docs.yml` alineado con `ci.yml`/`bench.yml`/`security.yml` (resolución E22, commit independiente con prefijo `ci:`).
+3. Dry-run del Tech Lead sobre kickoff de Fase 2 cubriendo: descomposición (2A/2B/2C vs monolítico), estructura del adapter Django, integración con `register_model`, matriz CI multi-versión, testcontainers o pytest-django, scope del primer ejemplo runnable.
 
 ---
 
@@ -428,7 +416,7 @@ Cerrada el 2026-05-14 con tag `v0.0.3-alpha.0` en commit `02667b8`. Documento de
 
 **DoD:** Tag `v0.5.0-alpha`.
 
-> **Nota:** según §6 #10 enmendado, **antes** del tag `v0.5.0-alpha`, el owner configura su llave de signing local y se empieza a firmar commits. Los commits previos no se reescriben.
+> **Nota:** según §6 #10, **antes** del tag `v0.5.0-alpha`, el owner configura su llave de signing local y se empieza a firmar commits. Los commits previos no se reescriben. ADR-0001 documenta formalmente esta decisión.
 
 ---
 
@@ -484,7 +472,7 @@ Cerrada el 2026-05-14 con tag `v0.0.3-alpha.0` en commit `02667b8`. Documento de
 - Fuzzing con `hypothesis` sobre el motor de políticas (≥ 1M ejemplos sin fallo).
 - Revisión de seguridad documentada (`SECURITY_AUDIT.md`).
 - Benchmarks publicados (`docs/benchmarks/`).
-- Documentación completa, incluida guía de migración desde `django-tenants` / scoped manual.
+- Documentación completa, incluida guía de migración desde `django-tenants` / scoped manual. Esto incluye expansión profunda de los conceptos hoy en scaffold (Sub-fase 1C entregó scaffold mínimo; Fase 8 entrega profundidad).
 - Página de tutorial.
 
 **Criterios de aceptación:**
@@ -512,7 +500,7 @@ Estas reglas aplican **a todo PR, desde el commit cero**.
 7. **Errores tipados.** No se lanza `Exception` ni `RuntimeError` genéricos.
 8. **Logs estructurados** vía `structlog`. Nada de `logger.info(f"...")` con interpolación.
 9. **Sin `# type: ignore` sin código de error específico y comentario.** Aplicable también a `# noqa: <RULE>` — si la regla efectivamente no dispara, RUF100 detectará el noqa innecesario.
-10. **Commits firmados (SSH/GPG/sigstore) a partir de v0.5.0-alpha**, una vez el owner configure su llave de signing local. Los commits previos no se reescriben para firmarse retroactivamente. ADR-0001 (materializado en sub-fase 1C) documenta formalmente esta decisión.
+10. **Commits firmados (SSH/GPG/sigstore) a partir de v0.5.0-alpha**, una vez el owner configure su llave de signing local. Los commits previos no se reescriben para firmarse retroactivamente. ADR-0001 (materializado en Sub-fase 1C) documenta formalmente esta decisión.
 11. **Reviewer ≠ Autor.** En este proyecto: yo (tech lead chat) reviso lo que ejecuta Claude Code.
 12. **CHANGELOG actualizado en cada PR** bajo `[Unreleased]`.
 13. **Atribución exclusiva al owner.** Ningún artefacto del proyecto (commit, PR, issue, documentación, metadatos del paquete) acredita herramientas de IA. La regla aplica a Claude, Copilot, Cursor, Aider, o cualquier otra asistencia automatizada presente o futura. La política pública se codifica en `CONTRIBUTING.md` §Attribution.
@@ -521,11 +509,11 @@ Estas reglas aplican **a todo PR, desde el commit cero**.
 16. **Bumps en cadena por mitigación de CVE.** Cuando la remediación de una CVE implica forced upgrades transitivos, cada bump debe pasar por *changelog review cualitativo* antes de aplicarse, no solo verificación de resolución de dependencias.
 17. **Verificación per-file con `--no-cov`.** El primer comando de verificación per-tarea (`pytest <file> -v`) incluye `--no-cov` cuando el gate global `--cov-fail-under=95` está activo. La verificación de cobertura es responsabilidad exclusiva del comando final per-módulo (`pytest --cov=<module> --cov-report=term-missing`).
 18. **Context managers usan `Generator`/`AsyncGenerator`, no `Iterator`/`AsyncIterator`.** El typeshed actual marca `Iterator[T]` como tipo de retorno de `@contextmanager` como deprecated. Las firmas canónicas son `Generator[T, None, None]` y `AsyncGenerator[T, None]`.
-19. **Conventional Commits exige veracidad descriptiva.** Cuando una tarea se aparta del kickoff por enmienda autorizada, el commit message refleja la realidad post-enmienda, no el contenido literal del kickoff.
+19. **Conventional Commits exige veracidad descriptiva.** Cuando una tarea se aparta del kickoff por enmienda autorizada, el commit message refleja la realidad post-enmienda, no el contenido literal del kickoff. Cuando un commit toca múltiples áreas (e.g. `docs/` + `.github/workflows/`), se separa en commits independientes con prefijos coherentes (`docs:` vs `ci:`).
 20. **Criterios de Hypothesis: `failing` no `invalid`.** La métrica de validación de propiedades es `0 failing examples`, no `0 invalid examples`. `invalid` es métrica de eficiencia de generación, no de calidad.
 21. **El kickoff manda sobre el GO message.** Cuando un mensaje de GO del Tech Lead generaliza un criterio que el kickoff trata de forma específica, el kickoff manda.
 22. **Specs literales pasan filtro de imports usados.** Cuando el Tech Lead dicta contenido literal de un archivo, debe verificar que cada import declarado se usa al menos una vez en el cuerpo. F401 detecta imports muertos; emitirlos en una spec es fallo del Tech Lead.
-23. **Tests de propiedades inestables usan techo catastrófico, no budget estricto.** Cuando una métrica varía significativamente entre runs en el mismo hardware por jitter del sistema, el test enforce un techo catastrófico (eg. 50x el peor caso observado) y deja los budgets estrictos para CI ephemeral aislado.
+23. **Tests de propiedades inestables usan techo catastrófico, no budget estricto.** Cuando una métrica varía significativamente entre runs en el mismo hardware por jitter del sistema, el test enforce un techo catastrófico (eg. 50x el peor caso observado) y deja los budgets estrictos para CI ephemeral aislado. Patrón canónico: env var `*_STRICT=1` selecciona budget estricto en CI; default usa techo catastrófico.
 24. **`try/except/pass` → `contextlib.suppress(<ExcType>)` siempre.** Ruff SIM105 dispara cuando `try/except/pass` cubre una sola excepción específica. `contextlib.suppress` es el patrón canónico moderno: comunica intención explícitamente y elimina simultáneamente SIM105 y S110 (que dispara sobre `pass`).
 25. **`Union[X, Y, Z]` → `X | Y | Z` por defecto (PEP 604).** En proyectos con target Python 3.10+ y toolchain moderno, la forma `|` es funcionalmente equivalente a `typing.Union` para todos los usos relevantes y permite además `isinstance(x, MyAlias)` directo.
 26. **Consolidaciones que afectan dependencias se materializan en `pyproject.toml` en el mismo commit.** Si una consolidación de fase registra un DR que menciona una dep nueva, el commit que registra el DR también añade la dep al manifest. Evita el gap roadmap/manifest documentado en E10.
@@ -533,6 +521,9 @@ Estas reglas aplican **a todo PR, desde el commit cero**.
 28. **`# pragma: no cover` legítimo en Protocol stubs y `assert_never` branches.** Dos casos: cuerpos `...` de métodos en `Protocol` clases (contrato, no implementación) y `case _: assert_never(d)` al final de un `match` exhaustivo (defensivo, debe ser inalcanzable en valid typing).
 29. **`@dataclass(frozen=True, slots=True)` sobre clases sin campos: quitar `slots=True`.** Bug conocido en CPython (lineage de `bpo-44806`, presente en 3.13.13 verificado empíricamente). El `__setattr__` generado falla con `TypeError` en lugar de `FrozenInstanceError`. Para clases marker sin campos, `frozen=True` se mantiene, `slots=True` se omite. Cuando los campos existen, `slots=True` se conserva.
 30. **Imports en tests/fixtures van top-level salvo ciclo estructural verificado empíricamente.** PLC0415 dispara sobre imports inline ornamentales. Tests no participan en grafos de import circular del paquete porque no son importados por nada. La regla "imports al top de archivo" aplica sin excepción en tests.
+31. **Precisiones del Tech Lead deben ser internamente consistentes.** Cuando una Precisión referencia un patrón ("idéntico al de X") y simultáneamente dicta un snippet, ambos deben coincidir. Si hay divergencia, el ejecutor aplica el patrón referenciado (X manda) y reporta la inconsistencia. La referencia explícita gana sobre el snippet inline. Para specs futuras: revisar dos veces que los snippets dictados textualmente coincidan con los patrones referenciados.
+32. **Versiones de tooling auxiliar se verifican antes de pinear.** Las versiones de mkdocs, mkdocstrings, hatch plugins, action versions de GitHub y otros paquetes auxiliares cambian más rápido que el contenido del roadmap. Antes de emitir specs con pins, **siempre** verificar latest stable vía `gh release view` o equivalente con filtro >2 semanas. Pins basados en memoria son obsoletos por construcción.
+33. **Workflows de GitHub Actions son internamente consistentes.** Los workflows del proyecto comparten versiones de actions (`@v6` para checkout, `@v8` para setup-uv, etc.) y patrones de setup (cache, python install). Cuando se añade un workflow nuevo, antes de commitear se verifica que sus versiones de actions coinciden con los existentes (`ci.yml` es la referencia canónica). Inconsistencia entre workflows del mismo proyecto es deuda explícita que se resuelve en la siguiente consolidación.
 
 ---
 
@@ -540,7 +531,7 @@ Estas reglas aplican **a todo PR, desde el commit cero**.
 
 Para cada fase o sub-fase:
 
-1. **Tech Lead** (chat) realiza *spec validation by dry-run* del kickoff antes de emitirlo. El dry-run cubre: (a) viabilidad del código que se escribe; (b) viabilidad de cómo lo verifica el toolchain con su config real, ejecutando mentalmente cada comando contra los plugins activos; (c) filtro de imports usados (regla §6 #22); (d) verificación empírica de ciclos cuando se prescribe deferred imports (con `python -c "import X"` antes de fijar la spec); (e) verificación de qué reglas de ruff disparan sobre cada patrón con la config actual.
+1. **Tech Lead** (chat) realiza *spec validation by dry-run* del kickoff antes de emitirlo. El dry-run cubre: (a) viabilidad del código que se escribe; (b) viabilidad de cómo lo verifica el toolchain con su config real, ejecutando mentalmente cada comando contra los plugins activos; (c) filtro de imports usados (regla §6 #22); (d) verificación empírica de ciclos cuando se prescribe deferred imports (con `python -c "import X"` antes de fijar la spec); (e) verificación de qué reglas de ruff disparan sobre cada patrón con la config actual; (f) consistencia interna entre referencias a patrones y snippets dictados (regla §6 #31); (g) versiones actuales de tooling auxiliar verificadas externamente (regla §6 #32).
 2. **Tech Lead** emite la instrucción de inicio referenciando este documento.
 3. **Claude Code** propone un *plan de implementación detallado* (lista de archivos, firmas de funciones clave, riesgos identificados).
 4. **Tech Lead** aprueba, corrige o rechaza el plan.
@@ -593,19 +584,25 @@ El criterio para distinguir: ¿existe al menos una segunda opción razonable que
 
 ## 9. Próximo paso inmediato
 
-Sub-fase 1B cerrada. **Sub-fase 1C en preparación.**
+Fase 1 cerrada. **Consolidación post-Fase 1 en curso:**
 
-El siguiente paso operativo es la emisión del `PHASE_1C_KICKOFF.md` por parte del Tech Lead, con dry-run aplicado. El dry-run debe resolver:
+1. **Roadmap v1.4** (este documento) — registrado DR-012, aplicadas enmiendas E20-E23 como reglas §6 #31-#33 y refinamientos §7.
+2. **CHANGELOG.md** — DR-012 registrado bajo `[Unreleased] → Decision Records`.
+3. **Workflow `docs.yml`** — bumpeado a versiones consistentes con `ci.yml`/`bench.yml`/`security.yml` (resuelve E22). Commit independiente con prefijo `ci:`.
 
-- Diseño detallado de `ModelRegistry` y `TenantAware` marker class.
-- Decisión arquitectónica sobre **aislamiento del registry por aplicación** (module-level dict, singleton, ContextVar de registry — opciones con trade-offs reales, decisión documentada como DR-012 si corresponde).
-- Integración inicial de `mkdocs-material` + `mkdocstrings[python]` y estructura mínima de `docs/`.
-- ADR-0001 (commit signing deferred to v0.5.0-alpha) como archivo formal en `docs/adr/`.
-- Bump de `_version.py` a `0.1.0a0`.
-- Workflow `bench.yml` con job dedicado de benchmarks en CI Linux verificando los budgets estrictos.
-- Posibles refactors operacionales: marker `property` para tests property-based (deuda D1 del closure 1B), `_clear_registry` fixture global (deuda D2 del closure 1B).
+Tras consolidación, **pausa profunda — cadencia γ extendida** antes de Fase 2.
 
-Cuando el owner confirme disponibilidad para arrancar 1C, el Tech Lead emite el kickoff y Claude Code propone el plan de implementación detallado antes de la primera tarea atómica.
+Cuando el owner confirme disponibilidad para arrancar Fase 2, el Tech Lead realiza dry-run cubriendo:
+
+- Descomposición de Fase 2 en sub-fases 2A/2B/2C vs ejecución monolítica.
+- Estructura del adapter Django: `apps.py`, `managers.py`, `signals.py`, `middleware.py`.
+- Integración inicial de `django-stubs` con `mypy --strict`.
+- Matriz CI multi-versión: Python 3.11/3.12/3.13 × Django 4.2/5.x.
+- Decisión sobre testcontainers vs pytest-django para integration tests.
+- Strategy para tests de regresión sobre los 5 patrones clásicos de leak (lista a redactar como `docs/concepts/known-leaks.md` durante Fase 2).
+- Interacción de `register_model` decorator con `models.Model` (multiple inheritance considerations).
+- Cómo `tenant_scope` interactúa con el ciclo request/response de Django.
+- Scope mínimo del primer ejemplo runnable en `examples/01_django/`.
 
 ---
 
@@ -615,8 +612,9 @@ Cuando el owner confirme disponibilidad para arrancar 1C, el Tech Lead emite el 
 |---|---|---|---|
 | 1.0 | 2026-05-13 (inicio Fase 0) | — | Versión inicial. |
 | 1.1 | 2026-05-13 (cierre Fase 0) | `v0.0.1-alpha.0` | Consolidación post-Fase 0: §6 #13/#14/#15/#16 nuevos, §6 #10 enmendado, §4.3 TenantId NewType (DR-009), §5 Fase 1 descompuesta (DR-008), §7 *spec validation by dry-run*. |
-| 1.2 | 2026-05-14 (cierre Sub-fase 1A) | `v0.0.2-alpha.0` | Consolidación post-Sub-fase 1A: §2 `structlog` añadido a stack (DR-010), §3 `bench.yml` previsto, §4.1 sinks built-in actualizados, §4.2 `structlog` como dep base documentada, §4.4 jerarquía marcada como implementada, §5 Sub-fase 1A marcada como ✅ con tag y resumen, §5 Sub-fase 1B refinada (Decision sealed type, benchmark techo catastrófico), §5 Sub-fase 1C con bump de versión explícito, §6 nuevas reglas #17-#23, §7 BLOCKER trivial vs analítico + verificación de autofixes + coherencia top-level. |
-| 1.3 | 2026-05-14 (cierre Sub-fase 1B) | `v0.0.3-alpha.0` | Consolidación post-Sub-fase 1B: §2 `structlog` zero-dep confirmado, §3 `bench.yml` movido a sub-fase 1C, `conftest.py` global notado, §4.1 diagrama actualizado con audit bus completo + SINK_FAILURE handling, §4.2 decisión sealed-por-convención formalizada, §4.5 NUEVO modelo de decisiones de Policy con DR-011, §5 Sub-fase 1B marcada como ✅ con tag y resumen, §5 Sub-fase 1C refinada (alcance acotado de docs, bench.yml dentro de scope, decisión arquitectónica de aislamiento del registry pendiente), §6 nuevas reglas #24-#30 (contextlib.suppress, X\|Y over Union, deps en manifest, ASCII puro en specs, pragma:no cover en Protocols/assert_never, frozen+slots+empty workaround, imports top-level en tests), §6 #9 reforzado con noqa policy, §7 dry-run expandido con verificación empírica de ciclos y filtros de ruff, §7 tests modelan al usuario nuevo. |
+| 1.2 | 2026-05-14 (cierre Sub-fase 1A) | `v0.0.2-alpha.0` | Consolidación post-Sub-fase 1A: §2 `structlog` añadido a stack (DR-010), §3 `bench.yml` previsto, §4.1 sinks built-in actualizados, §4.2 `structlog` como dep base documentada, §4.4 jerarquía marcada como implementada, §5 Sub-fase 1A marcada como ✅ con tag y resumen, §5 Sub-fase 1B refinada, §5 Sub-fase 1C con bump de versión explícito, §6 nuevas reglas #17-#23, §7 BLOCKER trivial vs analítico + verificación de autofixes + coherencia top-level. |
+| 1.3 | 2026-05-14 (cierre Sub-fase 1B) | `v0.0.3-alpha.0` | Consolidación post-Sub-fase 1B: §2 `structlog` zero-dep confirmado, §3 `bench.yml` movido a Sub-fase 1C, `conftest.py` global notado, §4.1 diagrama actualizado con audit bus completo + SINK_FAILURE handling, §4.2 decisión sealed-por-convención formalizada, §4.5 NUEVO modelo de decisiones de Policy con DR-011, §5 Sub-fase 1B marcada como ✅, §5 Sub-fase 1C refinada, §6 nuevas reglas #24-#30, §7 dry-run expandido, tests modelan al usuario. |
+| 1.4 | 2026-05-14 (cierre Fase 1) | `v0.1.0-alpha` | Consolidación post-Fase 1: §3 todos los entregables de Fase 1 marcados ✅, §4.6 NUEVO ModelRegistry como decisión arquitectónica (DR-012), §5 Fase 1 marcada como ✅ COMPLETADA con tabla consolidada de las tres sub-fases, §5 Fase 2 refinada con descomposición tentativa 2A/2B/2C y prerrequisitos explícitos, §6 nuevas reglas #31 (Precisiones internamente consistentes, E20), #32 (versiones de tooling auxiliar verificadas, E21), #33 (workflows internamente consistentes, E22), §6 #19 reforzado con separación de concerns en commits, §6 #23 ampliado con patrón env var `*_STRICT`, §7 dry-run expandido con consistencia interna (f) y versiones de tooling (g), §9 próximo paso inmediato actualizado para reflejar consolidación en curso y pausa γ pre-Fase 2. |
 
 ---
 

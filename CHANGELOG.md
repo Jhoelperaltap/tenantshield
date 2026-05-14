@@ -90,3 +90,15 @@ clarify statements in `PHASE_0_KICKOFF.md`:
   TypedDict in `policies.py` (premature; binds the structure to Sub-phase
   1B's imagination), dataclass with concrete fields (even more rigid),
   `Any` (loses any typing benefit).
+- **DR-012** — `ModelRegistry` exposed as a class with a global
+  `default_registry` instance, plus module-level convenience functions
+  (`register_model`, `is_tenant_aware`, `get_tenant_field`) that delegate
+  to it. Users who need isolation construct their own `ModelRegistry()`
+  and use it explicitly. Phase 2+ adapters will accept
+  `registry: ModelRegistry | None = None` and fall back to
+  `default_registry` when None. Rejected alternatives: module-level dict
+  singleton (locks the project into shared global state, requires a
+  breaking-change refactor if isolation becomes needed); ContextVar of
+  registry (over-engineering — registries are static metadata, not
+  runtime context; inconsistent with how Django/SQLAlchemy treat
+  registries; problematic at import-time when most registration happens).
