@@ -1,0 +1,27 @@
+name: bench
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: bench
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          python-version: "3.13"
+      - run: uv sync --all-extras --dev
+      - name: Run benchmarks (slow markers, strict mode)
+        run: uv run pytest -m slow -v --no-cov
+        env:
+          TENANTSHIELD_BENCH_STRICT: "1"

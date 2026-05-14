@@ -1,17 +1,21 @@
 """Smoke benchmark for the audit bus emit() function.
 
-This is not a pass/fail unit test in the traditional sense — it measures
+This is not a pass/fail unit test in the traditional sense - it measures
 the latency distribution of dispatching an event to three sinks, and
-asserts only a catastrophic-regression ceiling (100us median). The
-strict roadmap budget of < 10us applies to the Linux CI baseline (in a
-dedicated bench.yml workflow deferred to Sub-phase 1C); local development
-on Windows with antivirus active is expected to land in the 10-30us range.
+asserts a ceiling that depends on the execution mode:
+
+- Default (local development): catastrophic ceiling of 100us median.
+  Tolerates system jitter on Windows with AV active.
+- Strict (CI Linux via ``TENANTSHIELD_BENCH_STRICT=1``): roadmap budget
+  of 10us median. Verifies the aspirational performance target on a
+  controlled runner.
 
 Marked ``slow`` so it can be excluded from the default test run.
 """
 
 from __future__ import annotations
 
+import os
 import statistics
 import time
 
@@ -26,22 +30,21 @@ from tenantshield import (
     unregister_sink,
 )
 
+_STRICT_MODE = os.environ.get("TENANTSHIELD_BENCH_STRICT") == "1"
+_CEILING_NS = 10_000 if _STRICT_MODE else 100_000
+
 
 @pytest.mark.slow
 def test_emit_with_three_sinks_smoke() -> None:
     """Smoke benchmark for emit() with 3 sinks.
 
-    Same rationale as test_context_bench: no strict latency budget is
-    enforced on local development machines because system jitter (AV,
-    scheduling, frequency scaling) produces variance of 2-3x between
-    consecutive runs on the same machine. Instead, a generous catastrophic
-    ceiling catches real regressions (I/O introduced into the bus path,
-    lock contention, unintended work in dispatch) while tolerating noise.
+    Two modes selected via the ``TENANTSHIELD_BENCH_STRICT`` environment
+    variable:
 
-    The roadmap's < 10us budget for emit() applies to the Linux CI baseline
-    in a dedicated bench.yml workflow (deferred to Sub-phase 1C). This
-    local test uses 100us as the catastrophic ceiling - 10x the CI budget,
-    accommodating realistic Windows jitter.
+    - Local (default): catastrophic ceiling of 100us median - tolerates
+      system jitter.
+    - Strict (CI Linux): roadmap budget of 10us median - verifies the
+      aspirational performance target on a controlled runner.
     """
     iterations = 10_000
     sinks = [InMemorySink() for _ in range(3)]
@@ -67,10 +70,9 @@ def test_emit_with_three_sinks_smoke() -> None:
     p95_ns = statistics.quantiles(samples_ns, n=20)[18]
     p99_ns = statistics.quantiles(samples_ns, n=100)[98]
 
-    catastrophic_ceiling_ns = 100_000
-
-    assert median_ns < catastrophic_ceiling_ns, (
-        f"emit() median latency {median_ns}ns exceeds catastrophic ceiling "
-        f"of {catastrophic_ceiling_ns}ns. p95={p95_ns}ns p99={p99_ns}ns "
+    mode_label = "strict CI" if _STRICT_MODE else "local catastrophic"
+    assert median_ns < _CEILING_NS, (
+        f"emit() median latency {median_ns}ns exceeds {mode_label} ceiling "
+        f"of {_CEILING_NS}ns. p95={p95_ns}ns p99={p99_ns}ns "
         f"over {iterations} iterations with 3 sinks."
     )
