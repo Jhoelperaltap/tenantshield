@@ -12,6 +12,8 @@ exceptions and emits ``SINK_FAILURE`` events to the remaining sinks.
 
 from __future__ import annotations
 
+import contextlib
+import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -144,6 +146,75 @@ class StructLogSink:
         )
 
 
+_SINKS_REGISTRY: list[AuditSink] = []
+_REGISTRY_LOCK = threading.RLock()
+
+
+def register_sink(sink: AuditSink) -> None:
+    """Register a sink to receive audit events.
+
+    Idempotent: registering the same sink twice (verified by identity) has
+    no effect on the second call.
+    """
+    with _REGISTRY_LOCK:
+        if sink not in _SINKS_REGISTRY:
+            _SINKS_REGISTRY.append(sink)
+
+
+def unregister_sink(sink: AuditSink) -> None:
+    """Unregister a sink. If not registered, this is a no-op."""
+    with _REGISTRY_LOCK, contextlib.suppress(ValueError):
+        _SINKS_REGISTRY.remove(sink)
+
+
+def emit(event: AuditEvent) -> None:
+    """Dispatch an event to all registered sinks.
+
+    Sinks that raise exceptions do not interrupt other sinks. For each
+    failing sink, a ``SINK_FAILURE`` event is emitted to all OTHER
+    registered sinks (preventing infinite recursion). A second-level
+    failure (the ``SINK_FAILURE`` itself failing) is silently suppressed.
+    """
+    with _REGISTRY_LOCK:
+        snapshot = list(_SINKS_REGISTRY)
+
+    for sink in snapshot:
+        try:
+            sink.emit(event)
+        except Exception as exc:
+            _emit_sink_failure(
+                failing_sink=sink,
+                original_event=event,
+                error=exc,
+                all_sinks=snapshot,
+            )
+
+
+def _emit_sink_failure(
+    *,
+    failing_sink: AuditSink,
+    original_event: AuditEvent,
+    error: BaseException,
+    all_sinks: list[AuditSink],
+) -> None:
+    """Emit a SINK_FAILURE event to all sinks except the one that failed."""
+    failure_event = AuditEvent(
+        event_type=AuditEventType.SINK_FAILURE,
+        tenant_context=original_event.tenant_context,
+        payload={
+            "failing_sink_type": type(failing_sink).__name__,
+            "original_event_type": original_event.event_type.value,
+            "error_type": type(error).__name__,
+            "error_message": str(error),
+        },
+    )
+    for sink in all_sinks:
+        if sink is failing_sink:
+            continue
+        with contextlib.suppress(Exception):
+            sink.emit(failure_event)
+
+
 __all__ = [
     "AuditEvent",
     "AuditEventType",
@@ -151,4 +222,7 @@ __all__ = [
     "InMemorySink",
     "NullSink",
     "StructLogSink",
+    "emit",
+    "register_sink",
+    "unregister_sink",
 ]
