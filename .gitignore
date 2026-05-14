@@ -38,7 +38,8 @@ site/
 
 # Agent / local-only artifacts (not part of the project)
 CLAUDE.md
-PHASE_0_KICKOFF.md
+PHASE_*_KICKOFF.md
+PHASE_*_CLOSURE.md
 .claude/
 .aider*
 .cursor*
