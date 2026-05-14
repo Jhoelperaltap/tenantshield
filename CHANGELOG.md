@@ -53,3 +53,20 @@ clarify statements in `PHASE_0_KICKOFF.md`:
   authored directly against pytest-asyncio 1.x semantics. The pytest-asyncio
   1.x changelog was reviewed for `asyncio_mode = "strict"` regressions before
   bumping.
+- **DR-008** — Phase 1 is decomposed into three sub-phases (1A, 1B, 1C). Sub-phase
+  1A delivers `tenantshield.exceptions` and `tenantshield.context` (tagged
+  `v0.0.2-alpha.0`). Sub-phase 1B delivers `tenantshield.policies` and
+  `tenantshield.audit` (tagged `v0.0.3-alpha.0`). Sub-phase 1C delivers
+  `tenantshield.registry` plus mkdocs infrastructure and closes Phase 1
+  entirely (tagged `v0.1.0-alpha`). The decomposition delivers verifiable value
+  per sub-phase, forces intermediate documentation, and provides natural pause
+  points for the owner.
+- **DR-009** — `TenantId` is defined as `typing.NewType("TenantId", str)`. The
+  internal bus is always `str` to eliminate serialization ambiguity across
+  ORMs, transport layers, and persistence. User code is responsible for
+  coercion at the system boundary (e.g. `TenantId(str(user.tenant_id))`).
+  Public function signatures use `TenantId`, not bare `str`, to communicate
+  semantic intent to readers and type checkers. Rejected alternatives:
+  plain `str` (loses signal in code review), `TypeVar` (propagates genericity
+  across 50+ signatures), Pydantic/dataclass (runtime overhead unnecessary
+  for an identifier).
