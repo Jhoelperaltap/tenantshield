@@ -19,10 +19,13 @@ if TYPE_CHECKING:
 # ignores below are arquitectonic: parametrizing to models.QuerySet[models.Model]
 # would add no enforcement value and propagate Manager[Unknown] through callers.
 class TenantAwareQuerySet(models.QuerySet):  # type: ignore[type-arg]
-    """QuerySet that injects ``WHERE tenant_id = <current>`` automatically.
+    """QuerySet that propagates the tenant filter across chained operations.
 
-    All public read/write operations route through ``_apply_tenant_filter``
-    which raises ``MissingTenantContextError`` when no tenant context is active.
+    The actual injection of ``WHERE tenant_id = <ctx>`` happens in the
+    manager's ``get_queryset()``. This class ensures the filter survives
+    clone/chain operations (``filter()``, ``exclude()``) and provides the
+    contract that allows the manager to mark a queryset as filtered without
+    re-injecting on each terminal call.
 
     The ``_unscoped`` escape hatch on the model bypasses this entirely; its
     usage should be logged to the audit bus and justified in a docstring.
@@ -76,14 +79,6 @@ class TenantAwareQuerySet(models.QuerySet):  # type: ignore[type-arg]
         filtered._tenant_filter_applied = True
         return filtered
 
-    # Read operations
-    def all(self) -> Self:
-        qs: Self = super().all()
-        return qs._apply_tenant_filter()
-
-    def get(self, *args: object, **kwargs: object) -> models.Model:
-        return self._apply_tenant_filter().get(*args, **kwargs)
-
     def filter(self, *args: object, **kwargs: object) -> Self:
         qs: Self = super().filter(*args, **kwargs)
         return qs._apply_tenant_filter()
@@ -92,24 +87,32 @@ class TenantAwareQuerySet(models.QuerySet):  # type: ignore[type-arg]
         qs: Self = super().exclude(*args, **kwargs)
         return qs._apply_tenant_filter()
 
-    def count(self) -> int:
-        return self._apply_tenant_filter().count()
-
-    def exists(self) -> bool:
-        return self._apply_tenant_filter().exists()
-
-    # Write operations
-    def update(self, **kwargs: object) -> int:
-        return self._apply_tenant_filter().update(**kwargs)
-
-    def delete(self) -> tuple[int, dict[str, int]]:
-        return self._apply_tenant_filter().delete()
-
 
 # Dynamic base class via from_queryset is the idiomatic Django pattern but
 # django-stubs cannot type it through subclassing. The single ignore below
 # is arquitectonic, not a missing test.
 class TenantAwareManager(models.Manager.from_queryset(TenantAwareQuerySet)):  # type: ignore[misc]
-    """Manager that returns TenantAwareQuerySet instances by default."""
+    """Manager that injects the tenant filter at ``get_queryset()`` entry.
+
+    All access to ``Model.objects.*`` (all, count, get, exists, update,
+    delete, filter, exclude, etc.) starts from this pre-filtered queryset.
+    The plain Django QuerySet inherits the rest of the read/write surface
+    unchanged; no recursion-prone overrides on terminal methods.
+    """
 
     use_in_migrations: bool = False
+
+    def get_queryset(self) -> TenantAwareQuerySet:
+        """Return a TenantAwareQuerySet with the tenant filter pre-applied.
+
+        If no tenant context is active, raises MissingTenantContextError.
+        The ``_unscoped`` escape hatch bypasses this entirely.
+        """
+        # super().get_queryset() returns the queryset class wired by
+        # from_queryset (TenantAwareQuerySet), but django-stubs types it
+        # as QuerySet[Unknown] through the dynamic Manager base.
+        qs: TenantAwareQuerySet = super().get_queryset()  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType, reportAssignmentType]
+        # _apply_tenant_filter is package-internal API of this module; calling
+        # it from the companion Manager class is the documented contract,
+        # not external private access.
+        return qs._apply_tenant_filter()  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
