@@ -2,4 +2,14 @@
 
 from __future__ import annotations
 
-__all__: list[str] = []
+from tenantshield.adapters.django.decorators import tenant_aware
+from tenantshield.adapters.django.managers import (
+    TenantAwareManager,
+    TenantAwareQuerySet,
+)
+
+__all__ = [
+    "TenantAwareManager",
+    "TenantAwareQuerySet",
+    "tenant_aware",
+]
