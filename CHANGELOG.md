@@ -70,3 +70,12 @@ clarify statements in `PHASE_0_KICKOFF.md`:
   plain `str` (loses signal in code review), `TypeVar` (propagates genericity
   across 50+ signatures), Pydantic/dataclass (runtime overhead unnecessary
   for an identifier).
+- **DR-010** — `structlog` is a base dependency, not an optional extra. Sub-phase
+  1B introduces `StructLogSink` as a built-in `AuditSink`; making it conditional
+  on an extra (`tenantshield[audit]`) added friction without proportional benefit
+  given that `structlog` is a small, well-maintained package widely adopted in
+  the Python ecosystem. The `tenantshield[*]` extras are reserved for heavier
+  integrations (Django, SQLAlchemy, Celery, DRF, and future observability
+  adapters like OpenTelemetry). Rejected alternatives: structlog in `[audit]`
+  extra (friction, no clear benefit), structlog in `[dev]` only and forcing
+  users to implement their own sink (hostile to adoption).
