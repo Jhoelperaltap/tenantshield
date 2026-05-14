@@ -102,3 +102,42 @@ clarify statements in `PHASE_0_KICKOFF.md`:
   registry (over-engineering — registries are static metadata, not
   runtime context; inconsistent with how Django/SQLAlchemy treat
   registries; problematic at import-time when most registration happens).
+- **DR-013** — Django ORM enforcement uses custom `TenantAwareManager` +
+  `TenantAwareQuerySet` as the primary interception mechanism (Sub-phase
+  2A). Write-path validation supplements via `pre_save`/`pre_delete`
+  signals (Sub-phase 2A). Low-level query interception (SQL inspection,
+  monkey-patching of `_fetch_all`/`Compiler.execute_sql`) is **deferred
+  to Phase 5** as a Query Analyzer paranoid mode — defense in depth via
+  auditing, not primary enforcement. Rejected alternatives: pure
+  signal-based interception (Django emits no signals during query
+  compilation; would require monkey-patching private Django internals,
+  fragile against version upgrades, violates §1.1.3 "no hidden magic");
+  single-layer manager-only (leaves `_base_manager` and raw queries
+  unprotected, but acceptable in pre-1.0 with documented user discipline
+  and Phase 5 closing the gap).
+- **DR-014** — Django adapter exposes `@tenant_aware` decorator (not a
+  marker class via inheritance, not reuse of core `register_model`). The
+  decorator: (1) registers the model in the core's `default_registry`
+  via `register_model`, (2) replaces the model's default manager with
+  `TenantAwareManager` (raising `ConfigurationError` if a custom manager
+  already exists, with explicit `manager_class=` parameter for
+  composition), (3) installs an `_unscoped` manager as documented escape
+  hatch, (4) connects `pre_save`/`pre_delete` signals for write-path
+  validation. Rejected alternatives: extending core `register_model` to
+  do Django-specific work (violates core/adapter separation; same name
+  with different behavior depending on import path is confusing); marker
+  class via inheritance `TenantAware` (inconsistent with Sub-phase 1C's
+  rejection of inheritance-based markers in the core; Django `Meta` MRO
+  is delicate; obliges users with existing custom managers to refactor).
+- **DR-015** — Sub-phase 2A integration tests use `pytest-django` +
+  SQLite in-memory as the testing strategy. The enforcement logic of
+  `TenantAwareManager`/`TenantAwareQuerySet` (`WHERE tenant_id = ?`
+  injection) is database-agnostic; SQLite covers 100% of the testable
+  logic in 2A. Rejected alternatives: testcontainers-postgres only
+  (requires Docker locally and in CI; slows dev loop; raises adoption
+  barrier for contributors; provides no additional coverage for 2A's
+  actual logic); hybrid SQLite+Postgres via env var (over-engineering
+  for 2A; pattern reserved for Phase 3 (SQLAlchemy) or when DB-specific
+  features enter the codebase). Phase 3 or later sub-phases may
+  introduce `TENANTSHIELD_TEST_POSTGRES=1` env var following the
+  precedent of `TENANTSHIELD_BENCH_STRICT` (Sub-phase 1C).
