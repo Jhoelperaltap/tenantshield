@@ -16,12 +16,11 @@ from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from tenantshield._types import TenantId
 from tenantshield.exceptions import MissingTenantContextError
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator, Mapping
-
-    from tenantshield._types import TenantId
 
 
 def _empty_metadata() -> dict[str, object]:
@@ -144,6 +143,7 @@ async def atenant_scope(ctx: TenantContext) -> AsyncGenerator[TenantContext, Non
 
 __all__ = [
     "TenantContext",
+    "TenantId",
     "atenant_scope",
     "bind_tenant",
     "current_tenant",
