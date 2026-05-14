@@ -38,3 +38,18 @@ clarify statements in `PHASE_0_KICKOFF.md`:
   other languages, test fixtures, examples) are resolved by excluding the specific
   files in the tool's configuration, never by silencing the rule globally. First
   applied to `codespell` against `TENANTSHIELD_ROADMAP.md` in Task 0.5.
+- **DR-006** — Dependabot uses the `uv` ecosystem identifier, not `pip`. GitHub
+  Dependabot natively supports `uv` via the `dependabot-uv` adapter as of the
+  date Phase 0 was executed. The `uv` ecosystem reads `uv.lock` directly,
+  providing exact-version updates rather than range-based updates that `pip`
+  would produce against `pyproject.toml`. Verified against
+  `dependabot/dependabot-core` repository.
+- **DR-007** — Test stack bumped to pytest `>=9.0.3,<10.0` and pytest-asyncio
+  `>=1.3.0,<2.0` (where 1.3.0 is the latest stable verified at bump time).
+  Driver: CVE-2025-71176 in pytest 8.x with no 8.x backport available. The
+  pytest-asyncio bump is a forced consequence — pytest-asyncio `0.x` pinned
+  itself to `pytest<9` and the `1.x` line is required for compatibility.
+  Phase 0 smoke suite has no async tests; future Phase 1 async tests will be
+  authored directly against pytest-asyncio 1.x semantics. The pytest-asyncio
+  1.x changelog was reviewed for `asyncio_mode = "strict"` regressions before
+  bumping.
