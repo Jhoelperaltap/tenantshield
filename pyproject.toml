@@ -149,6 +149,8 @@ omit = [
     # in Sub-phase 2A.6. Revert in 2A.6 commit when integration tests cover them.
     "src/tenantshield/adapters/django/apps.py",
     "src/tenantshield/adapters/django/checks.py",
+    "src/tenantshield/adapters/django/decorators.py",
+    "src/tenantshield/adapters/django/managers.py",
 ]
 
 [tool.coverage.report]
