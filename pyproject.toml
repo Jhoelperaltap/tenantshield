@@ -152,3 +152,6 @@ exclude_lines = [
 [tool.bandit]
 exclude_dirs = ["tests", "docs", "examples"]
 skips = []
+
+[tool.codespell]
+skip = "TENANTSHIELD_ROADMAP.md"
