@@ -109,3 +109,18 @@ def test_policies_api_is_exported() -> None:
 def test_emit_re_exported_as_audit_emit() -> None:
     """The `emit` function is re-exported as `audit_emit` at top level."""
     assert tenantshield.audit_emit is _emit
+
+
+def test_registry_api_is_exported() -> None:
+    """Registry public API is accessible from tenantshield top-level."""
+    expected = {
+        "ModelRegistry",
+        "RegistryEntry",
+        "default_registry",
+        "get_tenant_field",
+        "is_tenant_aware",
+        "register_model",
+    }
+    for name in expected:
+        assert name in tenantshield.__all__, f"tenantshield.__all__ missing {name}"
+        assert hasattr(tenantshield, name), f"tenantshield.{name} missing"

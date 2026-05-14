@@ -44,6 +44,14 @@ from tenantshield.policies import (
     RequireScope,
     evaluate_and_audit,
 )
+from tenantshield.registry import (
+    ModelRegistry,
+    RegistryEntry,
+    default_registry,
+    get_tenant_field,
+    is_tenant_aware,
+    register_model,
+)
 
 __all__ = [
     "AdapterError",
@@ -63,10 +71,12 @@ __all__ = [
     "EnforcementError",
     "InMemorySink",
     "MissingTenantContextError",
+    "ModelRegistry",
     "NullSink",
     "Operation",
     "OperationType",
     "Policy",
+    "RegistryEntry",
     "RequireScope",
     "StructLogSink",
     "TenantContext",
@@ -79,7 +89,11 @@ __all__ = [
     "audit_emit",
     "bind_tenant",
     "current_tenant",
+    "default_registry",
     "evaluate_and_audit",
+    "get_tenant_field",
+    "is_tenant_aware",
+    "register_model",
     "register_sink",
     "tenant_scope",
     "try_current_tenant",
