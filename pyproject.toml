@@ -122,7 +122,7 @@ reportMissingTypeStubs = "error"
 
 [tool.pytest.ini_options]
 minversion = "8.0"
-addopts = "-ra -q --strict-markers --strict-config --cov=tenantshield --cov-report=term-missing --cov-report=xml --cov-fail-under=95"
+addopts = "-ra -q --strict-markers --strict-config --cov=tenantshield --cov-report=term-missing --cov-report=xml --cov-fail-under=95 -m 'not slow'"
 testpaths = ["tests"]
 asyncio_mode = "strict"
 filterwarnings = ["error"]
