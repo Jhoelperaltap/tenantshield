@@ -1,0 +1,154 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tenantshield"
+dynamic = ["version"]
+description = "Multi-tenant enforcement engine for Python. Prevents cross-tenant data leaks by construction."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "TenantShield Contributors" }]
+keywords = [
+    "multi-tenant",
+    "saas",
+    "security",
+    "django",
+    "sqlalchemy",
+    "celery",
+    "drf",
+    "tenant-isolation",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+django = []
+sqlalchemy = []
+celery = []
+drf = []
+all = []
+dev = [
+    "ruff>=0.6,<1.0",
+    "mypy>=1.11,<2.0",
+    "pyright>=1.1.380",
+    "pytest>=8.3,<9.0",
+    "pytest-asyncio>=0.24,<1.0",
+    "pytest-cov>=5.0,<7.0",
+    "hypothesis>=6.112",
+    "coverage[toml]>=7.6",
+    "bandit[toml]>=1.7",
+    "pip-audit>=2.7",
+    "pre-commit>=4.0",
+]
+
+[project.urls]
+# TODO(#1): replace with real URLs once GitHub repo is created.
+Homepage = "https://example.invalid/tenantshield"
+Documentation = "https://example.invalid/tenantshield"
+Repository = "https://example.invalid/tenantshield"
+Issues = "https://example.invalid/tenantshield"
+Changelog = "https://example.invalid/tenantshield"
+
+[tool.hatch.version]
+path = "src/tenantshield/_version.py"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+extend-exclude = ["docs/", "examples/"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W", "I", "N", "UP", "ANN", "S", "B", "A", "COM", "C4", "DTZ",
+    "T10", "EM", "EXE", "FA", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI",
+    "PT", "Q", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "ARG", "PTH",
+    "ERA", "PD", "PGH", "PL", "TRY", "FLY", "PERF", "FURB", "LOG", "RUF",
+]
+ignore = ["COM812", "ISC001"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "PLR2004", "ANN", "D"]
+"src/tenantshield/_version.py" = ["ALL"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+warn_return_any = true
+disallow_any_unimported = true
+disallow_any_explicit = false
+enable_error_code = [
+    "redundant-self",
+    "redundant-expr",
+    "possibly-undefined",
+    "truthy-bool",
+    "truthy-iterable",
+    "ignore-without-code",
+    "unused-awaitable",
+]
+pretty = true
+show_error_codes = true
+files = ["src/tenantshield"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.pyright]
+include = ["src/tenantshield"]
+pythonVersion = "3.11"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = "error"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra -q --strict-markers --strict-config --cov=tenantshield --cov-report=term-missing --cov-report=xml --cov-fail-under=95"
+testpaths = ["tests"]
+asyncio_mode = "strict"
+filterwarnings = ["error"]
+markers = [
+    "slow: marks slow tests",
+    "integration: marks integration tests",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["tenantshield"]
+omit = ["src/tenantshield/_version.py"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+fail_under = 95
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "@overload",
+    "if __name__ == .__main__.:",
+]
+
+[tool.bandit]
+exclude_dirs = ["tests", "docs", "examples"]
+skips = []
