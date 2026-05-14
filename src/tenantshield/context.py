@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 from tenantshield.exceptions import MissingTenantContextError
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Mapping
+    from collections.abc import AsyncGenerator, Generator, Mapping
 
     from tenantshield._types import TenantId
 
@@ -121,8 +121,30 @@ def bind_tenant(tenant_id: TenantId, /, **metadata: object) -> TenantContext:
     return TenantContext(tenant_id=tenant_id, metadata=metadata)
 
 
+@contextlib.asynccontextmanager
+async def atenant_scope(ctx: TenantContext) -> AsyncGenerator[TenantContext, None]:
+    """Activate ``ctx`` as the current tenant for the duration of the async block.
+
+    Args:
+        ctx: The tenant context to activate.
+
+    Yields:
+        The same context, for ergonomic ``async with`` binding.
+
+    Example:
+        >>> async with atenant_scope(bind_tenant(TenantId("acme"))) as ctx:
+        ...     assert current_tenant() is ctx
+    """
+    token = _bind_and_token(ctx)
+    try:
+        yield ctx
+    finally:
+        _TENANT_CONTEXT.reset(token)
+
+
 __all__ = [
     "TenantContext",
+    "atenant_scope",
     "bind_tenant",
     "current_tenant",
     "tenant_scope",
