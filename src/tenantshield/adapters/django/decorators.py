@@ -96,6 +96,16 @@ def tenant_aware(
         # Register in the core registry.
         default_registry.register(cls, tenant_field=tenant_field)
 
+        # Django auto-creates a plain Manager named "objects" for any model that
+        # doesn't define one explicitly. We must remove it before installing
+        # TenantAwareManager; otherwise both end up in cls._meta.local_managers
+        # and the plain Manager (first-registered) wins as Model.objects.
+        cls._meta.local_managers = [
+            m
+            for m in cls._meta.local_managers  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+            if not (m.name == "objects" and type(m) is models.Manager)  # pyright: ignore[reportUnknownArgumentType]
+        ]
+
         # Install TenantAwareManager + _unscoped escape hatch.
         cls.add_to_class("objects", TenantAwareManager())
         cls.add_to_class("_unscoped", models.Manager())
