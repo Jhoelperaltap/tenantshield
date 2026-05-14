@@ -1,0 +1,87 @@
+"""Write-path validation via Django signals."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from django.db.models.signals import pre_delete, pre_save
+
+from tenantshield._types import TenantId
+from tenantshield.context import try_current_tenant
+from tenantshield.exceptions import CrossTenantAccessError, MissingTenantContextError
+from tenantshield.registry import default_registry
+
+if TYPE_CHECKING:
+    from django.db import models
+
+
+def _validate_tenant_coherence(
+    sender: type[models.Model],
+    instance: models.Model,
+    operation: str,
+) -> None:
+    """Validate that a model instance's tenant matches the active context.
+
+    Raises:
+        MissingTenantContextError: if no tenant context is active.
+        CrossTenantAccessError: if the instance's tenant_id differs from
+            the active context's tenant_id.
+    """
+    ctx = try_current_tenant()
+    if ctx is None:
+        raise MissingTenantContextError(
+            operation=f"{operation}.{sender.__qualname__}",
+            stack_context={"hint": "No tenant context active for write operation."},
+        )
+
+    tenant_field = default_registry.get(sender).tenant_field
+    instance_tenant = getattr(instance, tenant_field, None)
+
+    if instance_tenant is None:
+        # Auto-fill on creation only (pk is None means the row has not been
+        # persisted). On update, a missing tenant_id is suspicious enough to
+        # surface as a cross-tenant access.
+        if instance.pk is None:
+            setattr(instance, tenant_field, ctx.tenant_id)
+            return
+        raise CrossTenantAccessError(
+            tenant_id_expected=ctx.tenant_id,
+            tenant_id_actual=None,
+            model=sender.__qualname__,
+            operation=f"{operation}.{sender.__qualname__}",
+        )
+
+    if str(instance_tenant) != str(ctx.tenant_id):
+        raise CrossTenantAccessError(
+            tenant_id_expected=ctx.tenant_id,
+            tenant_id_actual=TenantId(str(instance_tenant)),
+            model=sender.__qualname__,
+            operation=f"{operation}.{sender.__qualname__}",
+        )
+
+
+def _pre_save_handler(
+    sender: type[models.Model],
+    instance: models.Model,
+    **kwargs: object,  # noqa: ARG001
+) -> None:
+    _validate_tenant_coherence(sender, instance, "pre_save")
+
+
+def _pre_delete_handler(
+    sender: type[models.Model],
+    instance: models.Model,
+    **kwargs: object,  # noqa: ARG001
+) -> None:
+    _validate_tenant_coherence(sender, instance, "pre_delete")
+
+
+def connect_signals(model: type[models.Model]) -> None:
+    """Connect pre_save/pre_delete signals for a tenant-aware model.
+
+    Called by @tenant_aware decorator (Sub-phase 2A) after model registration.
+    """
+    # django-stubs declares Signal.connect with `receiver: (...) -> Unknown`,
+    # which pyright cannot narrow even though our handlers are concrete.
+    pre_save.connect(_pre_save_handler, sender=model)  # pyright: ignore[reportUnknownMemberType]
+    pre_delete.connect(_pre_delete_handler, sender=model)  # pyright: ignore[reportUnknownMemberType]

@@ -151,6 +151,7 @@ omit = [
     "src/tenantshield/adapters/django/checks.py",
     "src/tenantshield/adapters/django/decorators.py",
     "src/tenantshield/adapters/django/managers.py",
+    "src/tenantshield/adapters/django/signals.py",
 ]
 
 [tool.coverage.report]

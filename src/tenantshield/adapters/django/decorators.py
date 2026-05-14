@@ -100,7 +100,14 @@ def tenant_aware(
         cls.add_to_class("objects", TenantAwareManager())
         cls.add_to_class("_unscoped", models.Manager())
 
-        # Signal connection happens in 2A.5; reserved for that task.
+        # Connect pre_save/pre_delete signals for write-path validation.
+        # Deferred import for consistency with the TenantAwareManager import
+        # above; both modules live in the same package and could be top-level,
+        # but the symmetry is intentional.
+        from tenantshield.adapters.django.signals import connect_signals  # noqa: PLC0415
+
+        connect_signals(cls)
+
         return cls
 
     if model is None:
