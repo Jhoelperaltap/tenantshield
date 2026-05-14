@@ -1,0 +1,75 @@
+name: Bug report
+description: Report a defect in TenantShield.
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Before you submit:
+
+        - Do not include real tenant data, credentials, secrets, or production
+          identifiers in this report. Replace anything sensitive with a
+          placeholder such as `<TENANT_ID>` or `<API_KEY>`.
+        - If you believe this is a security vulnerability, do not file a public
+          issue. Follow the procedure in `SECURITY.md` instead.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear, concise description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Steps or a minimal code snippet that reproduces the issue.
+      render: python
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: TenantShield version
+      placeholder: "0.0.1a0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: framework
+    attributes:
+      label: Framework
+      options:
+        - Django
+        - SQLAlchemy
+        - Celery
+        - DRF
+        - Core / None of the above
+    validations:
+      required: true
+
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+      placeholder: "3.13.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or stack trace
+      description: Paste any structured log entries or traceback related to the bug.
+      render: text
