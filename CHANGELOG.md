@@ -141,3 +141,10 @@ clarify statements in `PHASE_0_KICKOFF.md`:
   features enter the codebase). Phase 3 or later sub-phases may
   introduce `TENANTSHIELD_TEST_POSTGRES=1` env var following the
   precedent of `TENANTSHIELD_BENCH_STRICT` (Sub-phase 1C).
+
+### Notes
+
+- **ADR-0002 (pending materialization in Sub-phase 2C)** — Django 6.0
+  support deferred. Sub-phase 2A pins `django>=4.2,<6.0`. ADR file
+  will be created when Sub-phase 2C expands the CI matrix to include
+  Django 6.0.
