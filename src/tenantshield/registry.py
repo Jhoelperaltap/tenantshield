@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from tenantshield.exceptions import ConfigurationError
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -127,7 +127,67 @@ class ModelRegistry:
             return len(self._entries)
 
 
+default_registry = ModelRegistry()
+
+
+def register_model(
+    model: type | None = None,
+    *,
+    tenant_field: str = "tenant_id",
+) -> type | Callable[[type], type]:
+    """Register a model as tenant-aware in the :data:`default_registry`.
+
+    Can be used as a decorator (with or without arguments) or called
+    directly with the model class.
+
+    Args:
+        model: The model class to register. If ``None``, returns a decorator.
+        tenant_field: Name of the attribute/column carrying the tenant id.
+
+    Returns:
+        The model class (when called with a model), or a decorator function
+        (when called without a model, e.g. ``@register_model(tenant_field=...)``).
+
+    Examples:
+        >>> @register_model
+        ... class Invoice:
+        ...     tenant_id: str
+        ...
+        >>> @register_model(tenant_field="org_id")
+        ... class Org:
+        ...     org_id: str
+        ...
+        >>> register_model(LegacyModel, tenant_field="account_id")
+    """
+
+    def _register(cls: type) -> type:
+        default_registry.register(cls, tenant_field=tenant_field)
+        return cls
+
+    if model is None:
+        return _register
+    return _register(model)
+
+
+def is_tenant_aware(model: type) -> bool:
+    """Return ``True`` if ``model`` is registered as tenant-aware in the default registry."""
+    return default_registry.is_registered(model)
+
+
+def get_tenant_field(model: type) -> str:
+    """Return the tenant field name for ``model`` from the default registry.
+
+    Raises:
+        ConfigurationError: if ``model`` is not registered.
+    """
+    return default_registry.get(model).tenant_field
+
+
 __all__ = [
     "ModelRegistry",
     "RegistryEntry",
+    "default_registry",
+    "get_tenant_field",
+    "is_tenant_aware",
+    "register_model",
 ]
