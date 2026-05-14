@@ -33,7 +33,9 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
 ]
-dependencies = []
+dependencies = [
+    "structlog>=25.0,<26.0",
+]
 
 [project.optional-dependencies]
 django = []

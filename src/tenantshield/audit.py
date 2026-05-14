@@ -17,8 +17,12 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+import structlog
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from structlog.stdlib import BoundLogger
 
     from tenantshield.context import TenantContext
 
@@ -80,8 +84,71 @@ class AuditSink(Protocol):
     def emit(self, event: AuditEvent) -> None: ...  # pragma: no cover
 
 
+class NullSink:
+    """A sink that discards all events. Useful for tests and as default."""
+
+    def emit(self, event: AuditEvent) -> None:
+        pass
+
+
+class InMemorySink:
+    """A sink that accumulates events in memory.
+
+    Not thread-safe by design for performance — intended for tests where
+    the test controls concurrency. If you need thread-safety in production
+    code, build a different sink.
+
+    Attributes:
+        events: List of emitted events, in order.
+    """
+
+    def __init__(self) -> None:
+        self.events: list[AuditEvent] = []
+
+    def emit(self, event: AuditEvent) -> None:
+        self.events.append(event)
+
+    def clear(self) -> None:
+        """Remove all accumulated events."""
+        self.events.clear()
+
+
+class StructLogSink:
+    """An audit sink that forwards events to a structlog ``BoundLogger``.
+
+    The sink does NOT configure structlog globally. The caller is responsible
+    for the structlog processor chain. If no logger is provided, the sink
+    uses ``structlog.get_logger("tenantshield.audit")`` which inherits the
+    caller's global structlog configuration.
+
+    Args:
+        logger: An optional pre-configured structlog logger. If ``None``, a
+            default logger bound to ``"tenantshield.audit"`` is used.
+
+    Example:
+        >>> import structlog
+        >>> from tenantshield.audit import StructLogSink, register_sink
+        >>> logger = structlog.get_logger("my_app").bind(component="tenancy")
+        >>> register_sink(StructLogSink(logger=logger))
+    """
+
+    def __init__(self, logger: BoundLogger | None = None) -> None:
+        self._logger = logger or structlog.get_logger("tenantshield.audit")
+
+    def emit(self, event: AuditEvent) -> None:
+        self._logger.info(
+            event.event_type.value,
+            timestamp=event.timestamp.isoformat(),
+            tenant_id=event.tenant_context.tenant_id if event.tenant_context else None,
+            payload=dict(event.payload),
+        )
+
+
 __all__ = [
     "AuditEvent",
     "AuditEventType",
     "AuditSink",
+    "InMemorySink",
+    "NullSink",
+    "StructLogSink",
 ]
