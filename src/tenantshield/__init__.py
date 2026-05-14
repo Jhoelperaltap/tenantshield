@@ -1,4 +1,15 @@
 from tenantshield._version import __version__
+from tenantshield.audit import (
+    AuditEvent,
+    AuditEventType,
+    AuditSink,
+    InMemorySink,
+    NullSink,
+    StructLogSink,
+    register_sink,
+    unregister_sink,
+)
+from tenantshield.audit import emit as audit_emit
 from tenantshield.context import (
     TenantContext,
     TenantId,
@@ -20,15 +31,44 @@ from tenantshield.exceptions import (
     TenantShieldError,
     UnscopedQueryError,
 )
+from tenantshield.policies import (
+    Allow,
+    AllowListPolicy,
+    ChainPolicy,
+    Decision,
+    Deny,
+    DenyByDefaultPolicy,
+    Operation,
+    OperationType,
+    Policy,
+    RequireScope,
+    evaluate_and_audit,
+)
 
 __all__ = [
     "AdapterError",
+    "Allow",
+    "AllowListPolicy",
     "AmbiguousTenantContextError",
+    "AuditEvent",
+    "AuditEventType",
+    "AuditSink",
+    "ChainPolicy",
     "ConfigurationError",
     "CrossTenantAccessError",
     "CrossTenantJoinError",
+    "Decision",
+    "Deny",
+    "DenyByDefaultPolicy",
     "EnforcementError",
+    "InMemorySink",
     "MissingTenantContextError",
+    "NullSink",
+    "Operation",
+    "OperationType",
+    "Policy",
+    "RequireScope",
+    "StructLogSink",
     "TenantContext",
     "TenantContextError",
     "TenantId",
@@ -36,8 +76,12 @@ __all__ = [
     "UnscopedQueryError",
     "__version__",
     "atenant_scope",
+    "audit_emit",
     "bind_tenant",
     "current_tenant",
+    "evaluate_and_audit",
+    "register_sink",
     "tenant_scope",
     "try_current_tenant",
+    "unregister_sink",
 ]
