@@ -1,0 +1,17 @@
+[project]
+name = "tenantshield-example-django"
+version = "0.1.0"
+description = "Runnable Django example demonstrating TenantShield multi-tenant isolation."
+requires-python = ">=3.11"
+dependencies = [
+    "tenantshield[django,jwt,drf] @ file://${PROJECT_ROOT}/../..",
+    "django>=6.0,<7.0",
+    "djangorestframework>=3.17.1,<4.0",
+]
+
+[project.optional-dependencies]
+dev = []
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"

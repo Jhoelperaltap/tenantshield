@@ -45,3 +45,10 @@ PHASE_*_CLOSURE.md
 .cursor*
 .continue/
 *.local.md
+
+# Django runtime artifacts (for examples/)
+*.sqlite3
+*.sqlite3-journal
+examples/*/staticfiles/
+examples/*/media/
+examples/*/local_settings.py
