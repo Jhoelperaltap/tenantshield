@@ -148,19 +148,11 @@ branch = true
 source = ["tenantshield"]
 omit = [
     "src/tenantshield/_version.py",
-    # Middleware modules excluded from coverage until integration tests
-    # cover them in Sub-phase 2B.8-2B.9. Reverted in 2B.10.
-    # checks.py re-added in 2B.6 because the new system checks (E002/W001/W002)
-    # lack dedicated tests until 2B.9; the pre-existing E001 tests remain.
+    # checks.py and middleware/__init__.py remain excluded until 2B.9 covers
+    # the new system checks (E002/W001/W002) and end-to-end middleware paths.
+    # Reverted fully in 2B.10.
     "src/tenantshield/adapters/django/checks.py",
-    "src/tenantshield/adapters/django/exceptions.py",
     "src/tenantshield/adapters/django/middleware/__init__.py",
-    "src/tenantshield/adapters/django/middleware/strategies/__init__.py",
-    "src/tenantshield/adapters/django/middleware/strategies/base.py",
-    "src/tenantshield/adapters/django/middleware/strategies/callable_.py",
-    "src/tenantshield/adapters/django/middleware/strategies/header.py",
-    "src/tenantshield/adapters/django/middleware/strategies/jwt.py",
-    "src/tenantshield/adapters/django/middleware/strategies/subdomain.py",
 ]
 
 [tool.coverage.report]

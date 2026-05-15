@@ -4,6 +4,8 @@ SECRET_KEY = "test-secret-not-for-production"  # noqa: S105
 
 DEBUG = False
 
+ALLOWED_HOSTS = ["*"]
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
