@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from tenantshield import TenantId, bind_tenant, tenant_scope
@@ -36,6 +36,14 @@ class _Invoice(_Base):
     __tablename__ = "test_invoice_events"
     id: Mapped[int] = mapped_column(primary_key=True)
     tenant_id: Mapped[str] = mapped_column()
+
+
+class _NonTenantData(_Base):
+    """Non-tenant-aware model for edge-case coverage of do_orm_execute."""
+
+    __tablename__ = "test_non_tenant_data"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    value: Mapped[int] = mapped_column()
 
 
 @pytest.fixture
@@ -174,15 +182,19 @@ class TestBeforeUpdateEventListener:
     def test_update_cross_tenant_raises(self, session: Session) -> None:
         inv_id = _insert_seed_invoice(session, "globex")
 
-        with tenant_scope(bind_tenant(TenantId("acme"))), Session(session.bind) as fresh:
+        # Load OUTSIDE scope so do_orm_execute does not filter the
+        # globex row out. Modify INSIDE acme scope to trigger
+        # before_update under a mismatching context.
+        with Session(session.bind) as fresh:
             inv = fresh.get(_Invoice, inv_id)
             assert inv is not None
-            inv.tenant_id = "globex"
-            with pytest.raises(CrossTenantAccessError) as exc_info:
-                fresh.flush()
+            with tenant_scope(bind_tenant(TenantId("acme"))):
+                inv.tenant_id = "globex"
+                with pytest.raises(CrossTenantAccessError) as exc_info:
+                    fresh.flush()
 
-            assert str(exc_info.value.tenant_id_expected) == "acme"
-            assert str(exc_info.value.tenant_id_actual) == "globex"
+                assert str(exc_info.value.tenant_id_expected) == "acme"
+                assert str(exc_info.value.tenant_id_actual) == "globex"
 
     def test_update_with_empty_tenant_id_raises_cross_tenant(self, session: Session) -> None:
         inv_id = _insert_seed_invoice(session, "acme")
@@ -228,15 +240,18 @@ class TestBeforeDeleteEventListener:
     def test_delete_cross_tenant_raises(self, session: Session) -> None:
         inv_id = _insert_seed_invoice(session, "globex")
 
-        with tenant_scope(bind_tenant(TenantId("acme"))), Session(session.bind) as fresh:
+        # Load OUTSIDE scope to bypass read filter; delete INSIDE acme
+        # scope to trigger before_delete under mismatching context.
+        with Session(session.bind) as fresh:
             inv = fresh.get(_Invoice, inv_id)
             assert inv is not None
-            fresh.delete(inv)
-            with pytest.raises(CrossTenantAccessError) as exc_info:
-                fresh.flush()
+            with tenant_scope(bind_tenant(TenantId("acme"))):
+                fresh.delete(inv)
+                with pytest.raises(CrossTenantAccessError) as exc_info:
+                    fresh.flush()
 
-            assert str(exc_info.value.tenant_id_expected) == "acme"
-            assert str(exc_info.value.tenant_id_actual) == "globex"
+                assert str(exc_info.value.tenant_id_expected) == "acme"
+                assert str(exc_info.value.tenant_id_actual) == "globex"
 
     def test_delete_with_empty_tenant_id_raises_cross_tenant(self, session: Session) -> None:
         inv_id = _insert_seed_invoice(session, "acme")
@@ -251,3 +266,85 @@ class TestBeforeDeleteEventListener:
 
             assert exc_info.value.tenant_id_actual is None
             assert "before_delete" in exc_info.value.operation
+
+
+class TestDoOrmExecuteEventListener:
+    """Verify do_orm_execute event filters reads on tenant-aware models."""
+
+    def _seed_invoices(self, session: Session) -> None:
+        """Helper: seed 2 acme invoices + 1 globex invoice."""
+        with tenant_scope(bind_tenant(TenantId("acme"))):
+            session.add(_Invoice(tenant_id="acme"))
+            session.add(_Invoice(tenant_id="acme"))
+            session.commit()
+        with tenant_scope(bind_tenant(TenantId("globex"))):
+            session.add(_Invoice(tenant_id="globex"))
+            session.commit()
+
+    def test_select_within_scope_returns_only_scope_rows(self, session: Session) -> None:
+        self._seed_invoices(session)
+
+        with tenant_scope(bind_tenant(TenantId("acme"))), Session(session.bind) as fresh:
+            rows = fresh.execute(select(_Invoice)).scalars().all()
+            assert len(rows) == 2
+            assert all(r.tenant_id == "acme" for r in rows)
+
+    def test_select_within_other_scope_returns_only_other_scope_rows(
+        self, session: Session
+    ) -> None:
+        self._seed_invoices(session)
+
+        with tenant_scope(bind_tenant(TenantId("globex"))), Session(session.bind) as fresh:
+            rows = fresh.execute(select(_Invoice)).scalars().all()
+            assert len(rows) == 1
+            assert rows[0].tenant_id == "globex"
+
+    def test_select_without_scope_returns_all_rows(self, session: Session) -> None:
+        # Fall-through behavior: no active scope, no filtering applied.
+        # Stricter behavior available via middleware in Sub-fase 3B.
+        self._seed_invoices(session)
+
+        with Session(session.bind) as fresh:
+            rows = fresh.execute(select(_Invoice)).scalars().all()
+            assert len(rows) == 3
+
+    def test_filtered_query_with_where_combines_with_tenant_filter(self, session: Session) -> None:
+        self._seed_invoices(session)
+
+        with tenant_scope(bind_tenant(TenantId("acme"))), Session(session.bind) as fresh:
+            stmt = select(_Invoice).where(_Invoice.id >= 1)
+            rows = fresh.execute(stmt).scalars().all()
+            assert len(rows) == 2
+            assert all(r.tenant_id == "acme" for r in rows)
+
+    def test_select_non_tenant_aware_model_passes_through(self, session: Session) -> None:
+        """Non-tenant-aware model: do_orm_execute skips filter injection."""
+        session.add(_NonTenantData(value=42))
+        session.add(_NonTenantData(value=99))
+        session.commit()
+
+        with tenant_scope(bind_tenant(TenantId("acme"))), Session(session.bind) as fresh:
+            rows = fresh.execute(select(_NonTenantData)).scalars().all()
+            assert len(rows) == 2
+
+    def test_raw_sql_passes_through_without_filter_injection(self, session: Session) -> None:
+        """Raw SQL (text()) is not an ORM statement; handler short-circuits."""
+
+        with tenant_scope(bind_tenant(TenantId("acme"))):
+            result = session.execute(text("SELECT 1 AS one"))
+            assert list(result) == [(1,)]
+
+    def test_bare_function_in_select_skips_entity_none_entries(self, session: Session) -> None:
+        """SELECT with bare function/literal yields entity=None in column_descriptions."""
+
+        self._seed_invoices(session)
+
+        with tenant_scope(bind_tenant(TenantId("acme"))), Session(session.bind) as fresh:
+            # SELECT count(*) FROM _Invoice -- column_descriptions includes
+            # a literal/function entry with entity=None.
+            stmt = select(func.count(_Invoice.id))
+            result = fresh.execute(stmt).scalar()
+            # Count reflects acme-filtered rows (2 acme), since the
+            # _Invoice entity is still in column_descriptions and
+            # gets the with_loader_criteria treatment via include_aliases.
+            assert result == 2

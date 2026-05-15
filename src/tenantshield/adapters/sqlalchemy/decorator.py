@@ -61,14 +61,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, TypeVar
 
-from tenantshield.adapters.sqlalchemy.events import register_write_enforcement
+from tenantshield.adapters.sqlalchemy.events import (
+    _TENANT_AWARE_SENTINEL,  # pyright: ignore[reportPrivateUsage]  # package-internal constant; sentinel name shared with do_orm_execute handler
+    register_write_enforcement,
+)
 from tenantshield.exceptions import ConfigurationError
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import DeclarativeBase
 
 
-_TENANT_AWARE_SENTINEL = "__tenantshield_tenant_aware__"
 _TENANT_ID_COLUMN_NAME = "tenant_id"
 
 T = TypeVar("T", bound="type[DeclarativeBase]")

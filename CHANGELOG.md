@@ -19,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   major-version target simplifies adapter implementation; PEP 561
   inline typing eliminates need for parallel stubs package.
   Materialized in Sub-fase 3A Tarea 3A.0.
+- **ADR-0007** -- Event-based enforcement for SQLAlchemy adapter.
+  Materializes Decision 4-A from PHASE_3A_KICKOFF.md. Three event
+  mechanisms compose tenant enforcement:
+  `before_insert`/`before_update`/`before_delete` mapper-scoped
+  events for writes; `do_orm_execute` session-scoped event for
+  reads via `with_loader_criteria` injection (static SQL expression,
+  not lambda — SA caches loader-criteria lambdas by body and ignores
+  closure variables). Reads fall through on missing scope; stricter
+  raise-on-missing behavior provided by middleware in Sub-fase 3B.
+  Materialized evidence-based in Sub-fase 3A Tarea 3A.5.
 
 ## [0.2.0-alpha] -- 2026-05-15
 
