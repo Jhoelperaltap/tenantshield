@@ -40,6 +40,7 @@ nav:
     - "0002 - Django 6.0 deferral": adr/0002-django-6-deferral.md
     - "0003 - Django 4.2 empirical support": adr/0003-django-4-2-empirical-support.md
     - "0004 - DRF stubs empirical support": adr/0004-drf-stubs-empirical-support.md
+    - "0005 - Tight upper bounds strategy": adr/0005-tight-upper-bounds-strategy.md
 
 markdown_extensions:
   - admonition

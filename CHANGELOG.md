@@ -44,6 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   3.17.x is type-checked using drf-stubs 3.16.9 in practice (empirically
   verified); upstream coverage classifiers do not declare specific DRF
   version support. Materialized in Sub-fase 2C mini-task 2C.A.0.
+- **ADR-0005** -- Tight upper bounds for typed-Django ecosystem pins
+  violating Rule 32. Adopts pin pattern `django>=4.2,<6.0.5` +
+  `django-stubs[compatible-mypy]>=6.0.3,<6.0.4` in Block C when latest
+  stables released <14 days. Documents meta-pattern for future
+  recurrences in typeddjango ecosystem (drf-stubs 3.16.9 in ADR-0004
+  was opportunistic; this is strategic). Materialized in Sub-fase 2C
+  Tarea 2C.C.1.
 
 ## [0.2.0-alpha.1] -- 2026-05-15
 

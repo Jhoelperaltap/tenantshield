@@ -5,7 +5,7 @@ description = "Runnable Django example demonstrating TenantShield multi-tenant i
 requires-python = ">=3.11"
 dependencies = [
     "tenantshield[django,jwt,drf] @ file://${PROJECT_ROOT}/../..",
-    "django>=5.2,<6.0",
+    "django>=5.2,<6.0.5",
     "djangorestframework>=3.17.1,<4.0",
 ]
 
