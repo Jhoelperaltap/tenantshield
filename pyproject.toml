@@ -154,7 +154,9 @@ omit = [
     "src/tenantshield/adapters/django/middleware/__init__.py",
     "src/tenantshield/adapters/django/middleware/strategies/__init__.py",
     "src/tenantshield/adapters/django/middleware/strategies/base.py",
+    "src/tenantshield/adapters/django/middleware/strategies/callable_.py",
     "src/tenantshield/adapters/django/middleware/strategies/header.py",
+    "src/tenantshield/adapters/django/middleware/strategies/jwt.py",
     "src/tenantshield/adapters/django/middleware/strategies/subdomain.py",
 ]
 
