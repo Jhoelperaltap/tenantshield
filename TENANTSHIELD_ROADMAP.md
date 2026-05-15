@@ -3,9 +3,9 @@
 > **Documento de gobierno técnico del proyecto.**
 > Autoridad: Tech Lead (sesión de chat).
 > Ejecutor: Claude Code Console.
-> Estado: v1.4 — Consolidación post-Fase 1.
+> Estado: v1.5 — Consolidación post-Sub-fase 2A.
 > Última revisión: 2026-05-14.
-> Tag de proyecto al revisar: `v0.1.0-alpha` (Fase 1 cerrada).
+> Tag de proyecto al revisar: `v0.2.0-alpha.0` (Sub-fase 2A cerrada).
 
 Este documento define **qué se construye, cómo se construye, con qué calidad y en qué orden**. Cualquier desviación requiere justificación técnica documentada en el `CHANGELOG.md` bajo la sección `Decision Records`. No se acepta "lo hice así porque era más rápido". El código que no cumple los estándares de este documento **no entra a `main`**.
 
@@ -302,15 +302,15 @@ Tres sub-fases consolidadas:
 
 **Objetivo:** Enforcement total sobre Django ORM y DRF. Primer adapter de framework — momento donde TenantShield deja de ser "motor puro Python" y se convierte en "motor + integración con ecosistema real".
 
-**Estado actual:** kickoff pendiente. Descomposición en sub-fases sujeta a dry-run del Tech Lead.
+**Estado actual:** Sub-fase 2A cerrada (`v0.2.0-alpha.0`, commit `9671ebb`, 2026-05-14). Sub-fase 2B siguiente. Descomposición ratificada en el kickoff de Fase 2 (2A → 2B → 2C).
 
-**Decisión preliminar sobre descomposición:** considerar 3 sub-fases:
+**Sub-fase 2A — Django ORM enforcement core.** **Status: closed at v0.2.0-alpha.0 (commit 9671ebb, 2026-05-14).** See `PHASE_2A_CLOSURE.md` for full closure documentation. Sub-phase 2B (middleware + tenant extraction) is the next focus.
 
-- **2A — Django ORM enforcement core.** TenantAwareManager/QuerySet, integración con `register_model`, validación de coherencia tenant en `pre_save`/`pre_delete`, detector de cross-tenant joins.
+**Descomposición ratificada:**
+
+- **2A — Django ORM enforcement core.** TenantAwareManager/QuerySet, integración con `register_model`, validación de coherencia tenant en `pre_save`/`pre_delete`, detector de cross-tenant joins. **Cerrada.**
 - **2B — Middleware + extracción de tenant.** `TenantContextMiddleware` configurable (subdomain, header, JWT claim, callable). Integración con ciclo request/response.
-- **2C — DRF integration.** ViewSet mixin, permission class `IsSameTenant`, serializer hooks. Ejemplo runnable en `examples/01_django/`.
-
-La decisión real (descomposición vs monolítico) se fija en el kickoff de Fase 2 tras dry-run completo.
+- **2C — DRF integration.** ViewSet mixin, permission class `IsSameTenant`, serializer hooks. Ejemplo runnable en `examples/01_django/`. Cierre de Fase 2 completa; tag `v0.2.0-alpha`.
 
 **Entregables consolidados:**
 
@@ -522,8 +522,32 @@ Estas reglas aplican **a todo PR, desde el commit cero**.
 29. **`@dataclass(frozen=True, slots=True)` sobre clases sin campos: quitar `slots=True`.** Bug conocido en CPython (lineage de `bpo-44806`, presente en 3.13.13 verificado empíricamente). El `__setattr__` generado falla con `TypeError` en lugar de `FrozenInstanceError`. Para clases marker sin campos, `frozen=True` se mantiene, `slots=True` se omite. Cuando los campos existen, `slots=True` se conserva.
 30. **Imports en tests/fixtures van top-level salvo ciclo estructural verificado empíricamente.** PLC0415 dispara sobre imports inline ornamentales. Tests no participan en grafos de import circular del paquete porque no son importados por nada. La regla "imports al top de archivo" aplica sin excepción en tests.
 31. **Precisiones del Tech Lead deben ser internamente consistentes.** Cuando una Precisión referencia un patrón ("idéntico al de X") y simultáneamente dicta un snippet, ambos deben coincidir. Si hay divergencia, el ejecutor aplica el patrón referenciado (X manda) y reporta la inconsistencia. La referencia explícita gana sobre el snippet inline. Para specs futuras: revisar dos veces que los snippets dictados textualmente coincidan con los patrones referenciados.
-32. **Versiones de tooling auxiliar se verifican antes de pinear.** Las versiones de mkdocs, mkdocstrings, hatch plugins, action versions de GitHub y otros paquetes auxiliares cambian más rápido que el contenido del roadmap. Antes de emitir specs con pins, **siempre** verificar latest stable vía `gh release view` o equivalente con filtro >2 semanas. Pins basados en memoria son obsoletos por construcción.
+32. **Versiones de dependencias se verifican antes de pinear, usando la fuente canónica por ecosistema (revisada en v1.5).** PyPI JSON API (`https://pypi.org/pypi/<pkg>/json`) para paquetes Python; `gh release view` para herramientas distribuidas vía GitHub Releases (actions, CLIs); el registry del package manager correspondiente para otros ecosistemas. El filtro de estabilidad >2 semanas aplica a la fuente canónica, no a duplicados o espejos. Declaraciones factuales del Tech Lead sobre el estado del ecosistema externo ("X no existe aún", "X está en versión Y", "X tiene LTS hasta Z") disparan la misma verificación que los pins; memoria sin verificación es obsoleta por construcción.
 33. **Workflows de GitHub Actions son internamente consistentes.** Los workflows del proyecto comparten versiones de actions (`@v6` para checkout, `@v8` para setup-uv, etc.) y patrones de setup (cache, python install). Cuando se añade un workflow nuevo, antes de commitear se verifica que sus versiones de actions coinciden con los existentes (`ci.yml` es la referencia canónica). Inconsistencia entre workflows del mismo proyecto es deuda explícita que se resuelve en la siguiente consolidación.
+34. **Precisiones del Tech Lead deben referenciar patrones coherentemente con decisiones y precedentes previos.** Nuevas Precisiones que contradicen un precedente sin justificación disparan BLOCKER analítico para resolución.
+35. **Declaraciones factuales del Tech Lead sobre estado del ecosistema externo requieren verificación.** Versión disponible, estado LTS, historial de release, comportamiento de framework — todos requieren confirmación contra la fuente canónica o test empírico antes de fijarse en specs. Aserciones desde memoria son no-fiables por construcción.
+36. **Precisiones que prescriben orden verifican el estado actual del archivo objetivo antes de afirmar el orden nuevo.** Prescribir cambios que entran en conflicto con patrones intencionales preexistentes es BLOCKER trivial.
+37. **Specs que retrasan tests para módulos productivos deben anticipar el efecto del gate global de cobertura en commits intermedios.** Si una spec crea código productivo sin tests a lo largo de tareas N..M y añade tests solo en M+1, la spec debe incluir el mecanismo de exclusión (omit list con comentario que documente la tarea de reversión) en la tarea N, no descubrirlo como BLOCKER a media ejecución.
+38. **Thresholds numéricos sobre noqa o type-ignore en Precisiones son heurísticas, no contratos.** Señalan auto-revisión y escalada a BLOCKER cuando se superan significativamente. Cuando el contexto (framework externo, limitación de stubs upstream, patrón canónico del ecosistema) justifica superar el threshold con cada entrada documentada arquitectónicamente en comentarios adyacentes, el threshold se supera tras discusión explícita de trade-off. La categorización por causa raíz importa más que el conteo absoluto.
+39. **Verificación de aplicación, no solo de importabilidad.** Cuando una tarea entrega un decorator, mixin, monkey-patch, o componente que modifica el comportamiento de una clase de framework externo, la verificación per-tarea debe incluir test empírico de aplicación contra el framework real: instanciar o aplicar el componente, ejercitar al menos un read y un write donde aplique, y verificar empíricamente la propiedad esperada (`type(Decorated.attribute).__name__`, inspección de comportamiento end-to-end). La importabilidad confirma que el código existe; la aplicación confirma que hace lo que su spec dice. Para adapters Django: cargar settings, decorar un modelo, correr un read y un write dentro de `tenant_scope`. Procedimientos equivalentes aplican a SQLAlchemy (Fase 3), Celery (Fase 4), y cualquier adapter futuro. Tres bugs arquitectónicos en Sub-fase 2A (commits `578652c`, `97db7f2`, `52f15ee`) fueron causados por violaciones de esta regla; la regla se añade retroactivamente para prevenir recurrencia.
+
+---
+
+## 6a. Datapoints Técnicos (referencia, no enforceable)
+
+Los siguientes items emergieron durante Sub-fase 2A como referencias técnicas para implementaciones futuras. No son reglas enforceables sino contexto útil para patrones similares en fases venideras.
+
+**Datapoint E28** — Decorators con tres formas de uso (`@d`, `@d(...)`, `d(Cls)`) requieren overloads con `/` (positional-only marker) consistente entre overloads cuando el primer parámetro es positional-only. mypy diagnostica inconsistencia con `[misc] Overloaded function implementation does not accept all possible arguments of signature N`. Relevante para decorators del adapter Fase 3 (SQLAlchemy) — patrones análogos probables.
+
+**Datapoint E29** — Ruff trata acceso a `_meta` distinto según el tipo del receptor. Con `model: type` (genérico), ruff diagnostica `SLF001`. Con `model: type[django.db.models.Model]` (parametrizado), ruff reconoce la declaración de django-stubs de `_meta` como public-by-contract y no diagnostica. Narrow el tipo lo antes posible tras entry para reducir overhead de noqa.
+
+**Datapoint E32** — `git -c tag.gpgSign=false tag -a ...` defensivo para operaciones de tag. Confirmado como no-op en el entorno actual pero protege contra cambios futuros de configuración global. Mismo patrón aplica cuando el commit signing se enforce sistemáticamente (diferido a `v0.5.0-alpha` per ADR-0001).
+
+**Datapoint E33** — El escape hatch `_unscoped` en el adapter Django es read-only por arquitectura. Los signal handlers (`pre_save`, `pre_delete`) se conectan al model class, no al manager; por lo tanto `_unscoped` bypasea el filtering del manager (read path) pero NO bypasea la validation de signals (write path). Documentar en `docs/concepts/known-leaks.md` al cierre de Fase 2.
+
+**Datapoint E34** — Inspección de receivers de Django signals requiere examinar contenido, no longitud. `Signal._live_receivers(sender=Model)` retorna tupla `(receivers, async_receivers)` — dos listas. `len(...)` naive siempre retorna 2. Para asserts "sin receivers conectados", verificar que ambas sub-listas estén vacías.
+
+**Datapoint E35** — Django models pueden declararse inline dentro de funciones test cuando `Meta.app_label` apunta a una app de `INSTALLED_APPS`. Útil para modelos efímeros que ejercitan código que itera sobre el registry de Django models (system checks, registry walkers) sin contaminar el testapp permanente. Cleanup vía `try/finally + default_registry.unregister(...)` previene contaminación entre tests.
 
 ---
 

@@ -7,11 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0-alpha.0] - 2026-05-14
+
 ### Added
 - Initial repository scaffolding and toolchain configuration (Phase 0).
 - Package skeleton with PEP 561 typing marker.
 - Smoke test suite with coverage gate at 95%.
 - Pre-commit hooks: file hygiene, ruff, mypy, bandit, codespell.
+- Django ORM enforcement adapter under `tenantshield.adapters.django`:
+  - `@tenant_aware` decorator for opt-in model registration with custom
+    `tenant_field` support.
+  - `TenantAwareManager` injecting tenant filter via `get_queryset()`.
+  - `TenantAwareQuerySet` propagating filter through chain operations
+    with double-injection protection.
+  - `_unscoped` escape hatch (plain Django Manager) for legitimate read
+    bypass (note: signals still validate writes; see ADR-0002 and
+    `docs/concepts/known-leaks.md` for full contract).
+  - `pre_save` / `pre_delete` signal handlers with auto-fill on create
+    (truthiness-based) and cross-tenant write rejection.
+  - `TenantShieldConfig` Django AppConfig with `INSTALLED_APPS`
+    integration.
+  - System check `tenantshield.E001` verifying decorated models declare
+    their referenced tenant field.
+- Integration test infrastructure: `tests/integration/django/` with
+  pytest-django + SQLite in-memory + testapp.
+- CI matrix: Python 3.11, 3.12, 3.13 x Django 4.2, 5.2.
+
+### Fixed
+
+- `decorators.py`: replace Django auto-created plain `Manager` before
+  installing `TenantAwareManager`, preventing silent enforcement bypass
+  (commit `578652c`). Pattern from `django-polymorphic` and
+  `django-modelcluster`.
+- `managers.py`: inject tenant filter at `Manager.get_queryset()` entry
+  point instead of overriding individual `QuerySet` read/write methods
+  (commit `97db7f2`). Previous architecture caused infinite recursion
+  in terminal methods (`count`, `get`, `exists`, `update`, `delete`)
+  and bypassed filtering on `Model.objects.all()` since Django's Manager
+  does not delegate to `QuerySet.all()`. Pattern from
+  `django-tenant-schemas` and `django-tenants`.
+- `signals.py`: auto-fill on create uses truthiness check (`not
+  instance_tenant`) instead of identity (`is None`), capturing Django's
+  CharField default of empty string in addition to None (commit
+  `52f15ee`).
 
 ### Decision Records
 
@@ -142,9 +180,10 @@ clarify statements in `PHASE_0_KICKOFF.md`:
   introduce `TENANTSHIELD_TEST_POSTGRES=1` env var following the
   precedent of `TENANTSHIELD_BENCH_STRICT` (Sub-phase 1C).
 
-### Notes
+### Architectural Decision Records
 
-- **ADR-0002 (pending materialization in Sub-phase 2C)** — Django 6.0
-  support deferred. Sub-phase 2A pins `django>=4.2,<6.0`. ADR file
-  will be created when Sub-phase 2C expands the CI matrix to include
-  Django 6.0.
+- **ADR-0001** — Commit signing deferred until immediately before the
+  `v0.5.0-alpha` release tag. See `docs/adr/0001-commit-signing-deferral.md`.
+- **ADR-0002** — Django 6.0 support deferred to Sub-phase 2C. See
+  `docs/adr/0002-django-6-deferral.md`. Sub-phase 2A pins
+  `django>=4.2,<6.0` covering LTS 4.2 and 5.2.
