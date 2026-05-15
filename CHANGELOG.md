@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Decision Records (pending tag)
+
+- **DR-016 -- Tenant extraction strategies architecture for Django middleware.**
+  Pattern: Protocol-based dispatch via `TenantExtractionStrategy` Protocol
+  with four built-in implementations (`SubdomainStrategy`, `HeaderStrategy`,
+  `JWTStrategy`, `CallableStrategy`). Resolution via `resolve_strategy(config)`
+  function in `strategies/__init__.py` translating Django settings dict to
+  strategy instance. Middleware composes one strategy at a time;
+  multi-strategy chains deferred to a later phase if demand emerges.
+
+- **DR-017 -- `on_missing_tenant` configurable behavior in Django middleware.**
+  Default `"raise"` honors fail-closed posture (DR-005). Alternatives `"404"`,
+  `"public"`, and callable cover real use cases: health checks, public APIs
+  mixed with tenant APIs, custom error responses. The `"public"` setting
+  always logs to the audit bus to make the bypass visible.
+
+- **DR-018 -- System check severity strategy for Django middleware.**
+  `tenantshield.E002` (Error) when middleware is in `MIDDLEWARE` but no
+  strategy is configured. `tenantshield.W001` (Warning) when
+  `on_missing_tenant="public"` is set. `tenantshield.W002` (Warning) when
+  `@tenant_aware` models exist but middleware is not in `MIDDLEWARE`.
+  Programmatic usage (Celery workers, scripts) is legitimate, so the
+  missing-middleware case is Warning, not Error.
+
 ## [0.2.0-alpha.0] - 2026-05-14
 
 ### Added
