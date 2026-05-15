@@ -18,7 +18,17 @@ INSTALLED_APPS = [
     "tests.integration.django.testapp",
 ]
 
-MIDDLEWARE: list[str] = []
+ROOT_URLCONF = "tests.integration.django.testapp.urls"
+
+MIDDLEWARE = [
+    "tenantshield.adapters.django.TenantContextMiddleware",
+]
+
+TENANTSHIELD = {
+    "tenant_extraction": "header",
+    "header_name": "X-Tenant-Id",
+    "on_missing_tenant": "raise",
+}
 
 USE_TZ = True
 
