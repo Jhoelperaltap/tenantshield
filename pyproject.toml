@@ -148,11 +148,6 @@ branch = true
 source = ["tenantshield"]
 omit = [
     "src/tenantshield/_version.py",
-    # checks.py and middleware/__init__.py remain excluded until 2B.9 covers
-    # the new system checks (E002/W001/W002) and end-to-end middleware paths.
-    # Reverted fully in 2B.10.
-    "src/tenantshield/adapters/django/checks.py",
-    "src/tenantshield/adapters/django/middleware/__init__.py",
 ]
 
 [tool.coverage.report]
