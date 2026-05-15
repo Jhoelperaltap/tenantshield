@@ -150,8 +150,10 @@ omit = [
     "src/tenantshield/_version.py",
     # Middleware modules excluded from coverage until integration tests
     # cover them in Sub-phase 2B.8-2B.9. Reverted in 2B.10.
+    "src/tenantshield/adapters/django/exceptions.py",
     "src/tenantshield/adapters/django/middleware/__init__.py",
     "src/tenantshield/adapters/django/middleware/strategies/__init__.py",
+    "src/tenantshield/adapters/django/middleware/strategies/base.py",
 ]
 
 [tool.coverage.report]
