@@ -145,13 +145,6 @@ branch = true
 source = ["tenantshield"]
 omit = [
     "src/tenantshield/_version.py",
-    # Adapter modules excluded from coverage until pytest-django setup arrives
-    # in Sub-phase 2A.6. Revert in 2A.6 commit when integration tests cover them.
-    "src/tenantshield/adapters/django/apps.py",
-    "src/tenantshield/adapters/django/checks.py",
-    "src/tenantshield/adapters/django/decorators.py",
-    "src/tenantshield/adapters/django/managers.py",
-    "src/tenantshield/adapters/django/signals.py",
 ]
 
 [tool.coverage.report]
