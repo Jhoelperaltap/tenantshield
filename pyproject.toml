@@ -152,6 +152,8 @@ source = ["tenantshield"]
 omit = [
     "src/tenantshield/_version.py",
     "src/tenantshield/adapters/drf/__init__.py",
+    "src/tenantshield/adapters/drf/exceptions.py",
+    "src/tenantshield/adapters/drf/permissions.py",
 ]
 
 [tool.coverage.report]
