@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, ClassVar
 import pytest
 from rest_framework import serializers as drf_serializers
 from rest_framework.exceptions import PermissionDenied as DRFPermissionDenied
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIClient, APIRequestFactory
 from rest_framework.viewsets import ModelViewSet
 
 from tenantshield import TenantId, bind_tenant, tenant_scope, try_current_tenant
@@ -334,3 +334,85 @@ class TestTenantValidatedSerializerMixin:
         update_ser.is_valid(raise_exception=True)
         with pytest.raises(MissingTenantContextError):
             update_ser.save()
+
+
+@pytest.mark.django_db(transaction=True)
+class TestDRFIntegrationEndToEnd:
+    """End-to-end DRF integration tests via APIClient.
+
+    Exercises the full stack: HTTP request -> TenantContextMiddleware
+    extracts tenant from X-Tenant-Id header -> IsSameTenant permission
+    -> TenantAwareViewSetMixin filters queryset ->
+    TenantValidatedSerializerMixin validates writes -> DRF response.
+
+    Requires testapp/viewsets.py InvoiceViewSet registered at
+    /api/invoices/ (testapp/urls.py via DefaultRouter).
+    """
+
+    @pytest.fixture
+    def api_client(self):
+        client = APIClient()
+        # Disable raise so middleware exceptions become 500 responses
+        # rather than propagating out of the test (Rule 42 / E40).
+        client.raise_request_exception = False
+        return client
+
+    @pytest.fixture(autouse=True)
+    def _setup_invoices(self, acme_scope, globex_scope):
+        with acme_scope:
+            Invoice._base_manager.create(tenant_id="acme", amount=100, description="acme-e2e-1")
+            Invoice._base_manager.create(tenant_id="acme", amount=200, description="acme-e2e-2")
+        with globex_scope:
+            Invoice._base_manager.create(tenant_id="globex", amount=300, description="globex-e2e-1")
+
+    def test_list_invoices_acme_returns_2(self, api_client):
+        response = api_client.get("/api/invoices/", HTTP_X_TENANT_ID="acme")
+        assert response.status_code == 200
+        data = response.json()
+        results = data.get("results", data) if isinstance(data, dict) else data
+        assert len(results) == 2
+        descriptions = sorted([r["description"] for r in results])
+        assert descriptions == ["acme-e2e-1", "acme-e2e-2"]
+
+    def test_list_invoices_globex_returns_1(self, api_client):
+        response = api_client.get("/api/invoices/", HTTP_X_TENANT_ID="globex")
+        assert response.status_code == 200
+        data = response.json()
+        results = data.get("results", data) if isinstance(data, dict) else data
+        assert len(results) == 1
+        assert results[0]["description"] == "globex-e2e-1"
+
+    def test_retrieve_cross_tenant_returns_404(self, api_client):
+        with tenant_scope(bind_tenant(TenantId("acme"))):
+            acme_invoice = Invoice.objects.get(description="acme-e2e-1")
+
+        response = api_client.get(
+            f"/api/invoices/{acme_invoice.pk}/",
+            HTTP_X_TENANT_ID="globex",
+        )
+        assert response.status_code == 404
+
+    def test_create_invoice_acme(self, api_client):
+        response = api_client.post(
+            "/api/invoices/",
+            data={"amount": 999, "description": "created-via-api"},
+            HTTP_X_TENANT_ID="acme",
+            format="json",
+        )
+        assert response.status_code == 201
+        body = response.json()
+        assert body["tenant_id"] == "acme"
+        assert body["description"] == "created-via-api"
+
+    def test_create_invoice_cross_tenant_returns_403(self, api_client):
+        response = api_client.post(
+            "/api/invoices/",
+            data={"tenant_id": "globex", "amount": 500, "description": "should-fail"},
+            HTTP_X_TENANT_ID="acme",
+            format="json",
+        )
+        assert response.status_code == 403
+
+    def test_request_no_tenant_header_returns_error(self, api_client):
+        response = api_client.get("/api/invoices/")
+        assert response.status_code in (401, 403, 404, 500)

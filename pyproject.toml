@@ -155,9 +155,6 @@ branch = true
 source = ["tenantshield"]
 omit = [
     "src/tenantshield/_version.py",
-    # drf/__init__.py: re-exports only; covered end-to-end in Tarea 2C.A.5
-    # when testapp's URL-registered viewsets exercise the import paths.
-    "src/tenantshield/adapters/drf/__init__.py",
 ]
 
 [tool.coverage.report]
