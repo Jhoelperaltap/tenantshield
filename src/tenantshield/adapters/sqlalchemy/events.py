@@ -98,15 +98,134 @@ def _before_insert_handler(
         )
 
 
+def _before_update_handler(
+    mapper: Mapper[Any],
+    connection: Connection,  # noqa: ARG001
+    target: Any,  # noqa: ANN401
+) -> None:
+    """Enforce tenant context on UPDATE operations.
+
+    Behavior:
+
+    1. If no active tenant scope: raise ``MissingTenantContextError``.
+    2. Validate ``target.tenant_id`` matches ``ctx.tenant_id``; raise
+       ``CrossTenantAccessError`` on mismatch.
+
+    Note: unlike INSERT, UPDATE never auto-injects. A tenant-aware row
+    reaching UPDATE always had ``tenant_id`` set at INSERT time.
+    Mismatch indicates either (a) cross-tenant write attempt or (b)
+    tenant_id mutation, both prohibited.
+
+    Pattern matches Django adapter
+    ``signals._validate_tenant_coherence`` for the UPDATE path.
+
+    Args:
+        mapper: SQLAlchemy Mapper for the model class (provided by
+            event).
+        connection: Active DB connection (provided by event; unused).
+        target: Model instance being updated.
+
+    Raises:
+        MissingTenantContextError: If no active tenant scope is bound
+            when UPDATE fires.
+        CrossTenantAccessError: If ``target.tenant_id`` does not match
+            active scope (including missing tenant_id case).
+    """
+    ctx = try_current_tenant()
+    if ctx is None:
+        raise MissingTenantContextError(
+            operation=f"before_update.{mapper.class_.__qualname__}",
+            stack_context={
+                "hint": "No tenant context active for UPDATE operation.",
+            },
+        )
+
+    target_tenant = getattr(target, _TENANT_ID_COLUMN_NAME, None)
+
+    if not target_tenant:
+        raise CrossTenantAccessError(
+            tenant_id_expected=ctx.tenant_id,
+            tenant_id_actual=None,
+            model=mapper.class_.__qualname__,
+            operation=f"before_update.{mapper.class_.__qualname__}",
+        )
+
+    if str(target_tenant) != str(ctx.tenant_id):
+        raise CrossTenantAccessError(
+            tenant_id_expected=ctx.tenant_id,
+            tenant_id_actual=TenantId(str(target_tenant)),
+            model=mapper.class_.__qualname__,
+            operation=f"before_update.{mapper.class_.__qualname__}",
+        )
+
+
+def _before_delete_handler(
+    mapper: Mapper[Any],
+    connection: Connection,  # noqa: ARG001
+    target: Any,  # noqa: ANN401
+) -> None:
+    """Enforce tenant context on DELETE operations.
+
+    Behavior:
+
+    1. If no active tenant scope: raise ``MissingTenantContextError``.
+    2. Validate ``target.tenant_id`` matches ``ctx.tenant_id``; raise
+       ``CrossTenantAccessError`` on mismatch.
+
+    Pattern matches Django adapter
+    ``signals._validate_tenant_coherence`` for the DELETE path.
+
+    Args:
+        mapper: SQLAlchemy Mapper for the model class (provided by
+            event).
+        connection: Active DB connection (provided by event; unused).
+        target: Model instance being deleted.
+
+    Raises:
+        MissingTenantContextError: If no active tenant scope is bound
+            when DELETE fires.
+        CrossTenantAccessError: If ``target.tenant_id`` does not match
+            active scope (including missing tenant_id case).
+    """
+    ctx = try_current_tenant()
+    if ctx is None:
+        raise MissingTenantContextError(
+            operation=f"before_delete.{mapper.class_.__qualname__}",
+            stack_context={
+                "hint": "No tenant context active for DELETE operation.",
+            },
+        )
+
+    target_tenant = getattr(target, _TENANT_ID_COLUMN_NAME, None)
+
+    if not target_tenant:
+        raise CrossTenantAccessError(
+            tenant_id_expected=ctx.tenant_id,
+            tenant_id_actual=None,
+            model=mapper.class_.__qualname__,
+            operation=f"before_delete.{mapper.class_.__qualname__}",
+        )
+
+    if str(target_tenant) != str(ctx.tenant_id):
+        raise CrossTenantAccessError(
+            tenant_id_expected=ctx.tenant_id,
+            tenant_id_actual=TenantId(str(target_tenant)),
+            model=mapper.class_.__qualname__,
+            operation=f"before_delete.{mapper.class_.__qualname__}",
+        )
+
+
 def register_write_enforcement(cls: type) -> None:
     """Register write-path event listeners on a tenant-aware model class.
 
     Invoked by the ``@tenant_aware`` decorator at class-definition time
-    to attach event listeners for INSERT enforcement.
-
-    UPDATE + DELETE listener registration deferred to Tarea 3A.4.
+    to attach event listeners for INSERT, UPDATE, and DELETE
+    enforcement. Completes DR-021 write enforcement materialization
+    in Tarea 3A.4.
 
     Args:
         cls: SQLAlchemy declarative model class marked as tenant-aware.
     """
     event.listen(cls, "before_insert", _before_insert_handler)
+    event.listen(cls, "before_update", _before_update_handler)
+    event.listen(cls, "before_delete", _before_delete_handler)

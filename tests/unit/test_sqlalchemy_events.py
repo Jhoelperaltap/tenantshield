@@ -130,3 +130,124 @@ class TestBeforeInsertEventListener:
 
         assert inv_acme.tenant_id == "acme"
         assert inv_globex.tenant_id == "globex"
+
+
+def _insert_seed_invoice(session: Session, tenant: str) -> int:
+    """Insert a seed invoice within tenant scope; return its id.
+
+    Helper for UPDATE / DELETE tests that need pre-existing rows.
+    """
+    with tenant_scope(bind_tenant(TenantId(tenant))):
+        inv = _Invoice(tenant_id=tenant)
+        session.add(inv)
+        session.flush()
+        inv_id = inv.id
+        session.commit()
+    return inv_id
+
+
+class TestBeforeUpdateEventListener:
+    """Verify before_update event enforcement on tenant-aware models."""
+
+    def test_update_without_scope_raises_missing_context(self, session: Session) -> None:
+        inv_id = _insert_seed_invoice(session, "acme")
+
+        with Session(session.bind) as fresh:
+            inv = fresh.get(_Invoice, inv_id)
+            assert inv is not None
+            inv.tenant_id = "acme"
+            with pytest.raises(MissingTenantContextError) as exc_info:
+                fresh.flush()
+
+            assert "before_update" in exc_info.value.operation
+
+    def test_update_in_matching_scope_succeeds(self, session: Session) -> None:
+        inv_id = _insert_seed_invoice(session, "acme")
+
+        with tenant_scope(bind_tenant(TenantId("acme"))), Session(session.bind) as fresh:
+            inv = fresh.get(_Invoice, inv_id)
+            assert inv is not None
+            inv.tenant_id = "acme"
+            fresh.flush()
+            fresh.commit()
+
+    def test_update_cross_tenant_raises(self, session: Session) -> None:
+        inv_id = _insert_seed_invoice(session, "globex")
+
+        with tenant_scope(bind_tenant(TenantId("acme"))), Session(session.bind) as fresh:
+            inv = fresh.get(_Invoice, inv_id)
+            assert inv is not None
+            inv.tenant_id = "globex"
+            with pytest.raises(CrossTenantAccessError) as exc_info:
+                fresh.flush()
+
+            assert str(exc_info.value.tenant_id_expected) == "acme"
+            assert str(exc_info.value.tenant_id_actual) == "globex"
+
+    def test_update_with_empty_tenant_id_raises_cross_tenant(self, session: Session) -> None:
+        inv_id = _insert_seed_invoice(session, "acme")
+
+        with tenant_scope(bind_tenant(TenantId("acme"))), Session(session.bind) as fresh:
+            inv = fresh.get(_Invoice, inv_id)
+            assert inv is not None
+            inv.tenant_id = ""
+            with pytest.raises(CrossTenantAccessError) as exc_info:
+                fresh.flush()
+
+            assert exc_info.value.tenant_id_actual is None
+            assert "before_update" in exc_info.value.operation
+
+
+class TestBeforeDeleteEventListener:
+    """Verify before_delete event enforcement on tenant-aware models."""
+
+    def test_delete_without_scope_raises_missing_context(self, session: Session) -> None:
+        inv_id = _insert_seed_invoice(session, "acme")
+
+        with Session(session.bind) as fresh:
+            inv = fresh.get(_Invoice, inv_id)
+            assert inv is not None
+            fresh.delete(inv)
+            with pytest.raises(MissingTenantContextError) as exc_info:
+                fresh.flush()
+
+            assert "before_delete" in exc_info.value.operation
+
+    def test_delete_in_matching_scope_succeeds(self, session: Session) -> None:
+        inv_id = _insert_seed_invoice(session, "acme")
+
+        with tenant_scope(bind_tenant(TenantId("acme"))), Session(session.bind) as fresh:
+            inv = fresh.get(_Invoice, inv_id)
+            assert inv is not None
+            fresh.delete(inv)
+            fresh.flush()
+            fresh.commit()
+            still_there = fresh.get(_Invoice, inv_id)
+            assert still_there is None
+
+    def test_delete_cross_tenant_raises(self, session: Session) -> None:
+        inv_id = _insert_seed_invoice(session, "globex")
+
+        with tenant_scope(bind_tenant(TenantId("acme"))), Session(session.bind) as fresh:
+            inv = fresh.get(_Invoice, inv_id)
+            assert inv is not None
+            fresh.delete(inv)
+            with pytest.raises(CrossTenantAccessError) as exc_info:
+                fresh.flush()
+
+            assert str(exc_info.value.tenant_id_expected) == "acme"
+            assert str(exc_info.value.tenant_id_actual) == "globex"
+
+    def test_delete_with_empty_tenant_id_raises_cross_tenant(self, session: Session) -> None:
+        inv_id = _insert_seed_invoice(session, "acme")
+
+        with tenant_scope(bind_tenant(TenantId("acme"))), Session(session.bind) as fresh:
+            inv = fresh.get(_Invoice, inv_id)
+            assert inv is not None
+            inv.tenant_id = ""
+            fresh.delete(inv)
+            with pytest.raises(CrossTenantAccessError) as exc_info:
+                fresh.flush()
+
+            assert exc_info.value.tenant_id_actual is None
+            assert "before_delete" in exc_info.value.operation
