@@ -12,9 +12,11 @@ DR-019 documents the triple-defense architecture.
 from __future__ import annotations
 
 from tenantshield.adapters.drf.exceptions import TenantPermissionDenied
+from tenantshield.adapters.drf.mixins import TenantAwareViewSetMixin
 from tenantshield.adapters.drf.permissions import IsSameTenant
 
 __all__ = [
     "IsSameTenant",
+    "TenantAwareViewSetMixin",
     "TenantPermissionDenied",
 ]
