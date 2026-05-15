@@ -98,6 +98,10 @@ ignore = ["COM812", "ISC001"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "PLR2004", "ANN", "D"]
+# DRF integration tests legitimately access _base_manager to simulate
+# bypass scenarios (Pattern B documented in TenantAwareViewSetMixin
+# docstring). Productive code never does.
+"tests/integration/django/test_drf.py" = ["S101", "PLR2004", "ANN", "D", "SLF001"]
 "src/tenantshield/_version.py" = ["ALL"]
 
 [tool.ruff.format]
@@ -151,11 +155,9 @@ branch = true
 source = ["tenantshield"]
 omit = [
     "src/tenantshield/_version.py",
+    # drf/__init__.py: re-exports only; covered end-to-end in Tarea 2C.A.5
+    # when testapp's URL-registered viewsets exercise the import paths.
     "src/tenantshield/adapters/drf/__init__.py",
-    "src/tenantshield/adapters/drf/exceptions.py",
-    "src/tenantshield/adapters/drf/mixins.py",
-    "src/tenantshield/adapters/drf/permissions.py",
-    "src/tenantshield/adapters/drf/serializers.py",
 ]
 
 [tool.coverage.report]
