@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(Pending entries for Phase 3 SQLAlchemy adapter or subsequent work.)
+### Added
+
+- `tenantshield[sqlalchemy]` optional dependency extra declaring
+  `sqlalchemy>=2.0,<3.0`. Foundation for Phase 3 SQLAlchemy adapter
+  (in progress).
+
+### Architectural Decision Records (pending tag)
+
+- **ADR-0006** -- SQLAlchemy 2.0+ only; drops 1.4 support. Single
+  major-version target simplifies adapter implementation; PEP 561
+  inline typing eliminates need for parallel stubs package.
+  Materialized in Sub-fase 3A Tarea 3A.0.
 
 ## [0.2.0-alpha] -- 2026-05-15
 

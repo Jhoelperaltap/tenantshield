@@ -41,6 +41,7 @@ nav:
     - "0003 - Django 4.2 empirical support": adr/0003-django-4-2-empirical-support.md
     - "0004 - DRF stubs empirical support": adr/0004-drf-stubs-empirical-support.md
     - "0005 - Tight upper bounds strategy": adr/0005-tight-upper-bounds-strategy.md
+    - "0006 - SQLAlchemy 2.0 only": adr/0006-sqlalchemy-2-0-only.md
 
 markdown_extensions:
   - admonition
