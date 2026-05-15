@@ -38,6 +38,7 @@ nav:
   - ADRs:
     - "0001 - Commit signing deferral": adr/0001-commit-signing-deferral.md
     - "0002 - Django 6.0 deferral": adr/0002-django-6-deferral.md
+    - "0003 - Django 4.2 empirical support": adr/0003-django-4-2-empirical-support.md
 
 markdown_extensions:
   - admonition

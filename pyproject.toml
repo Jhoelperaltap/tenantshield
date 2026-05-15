@@ -46,7 +46,9 @@ jwt = [
 ]
 sqlalchemy = []
 celery = []
-drf = []
+drf = [
+    "djangorestframework>=3.17.1,<4.0",
+]
 all = []
 dev = [
     "ruff>=0.6,<1.0",
@@ -148,6 +150,7 @@ branch = true
 source = ["tenantshield"]
 omit = [
     "src/tenantshield/_version.py",
+    "src/tenantshield/adapters/drf/__init__.py",
 ]
 
 [tool.coverage.report]

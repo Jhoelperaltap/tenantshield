@@ -7,8 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(Empty -- next sub-phase 2C adds DRF integration, Django 6.0 matrix
-expansion, and tag v0.2.0-alpha closing Phase 2.)
+### Decision Records (pending tag)
+
+- **DR-019** -- DRF adapter triple-defense architecture. Three layers
+  composing the request lifecycle: (1) `IsSameTenant` permission for
+  request-level + object-level enforcement at the view boundary,
+  (2) `TenantAwareViewSetMixin` for ViewSet pre-filtering of `get_queryset`,
+  (3) `TenantValidatedSerializerMixin` for write-path tenant validation on
+  serializer save. Each layer is independent and fail-closed; presence of
+  any one would catch a leak, but the triple defense is intentional
+  per the deny-by-default architecture. Rejected alternatives:
+  permission-only (misses ViewSet pre-filtering optimization and
+  serializer write validation), middleware-only (DRF Router routes
+  bypass Django middleware paths in some configurations).
+- **DR-020** -- Examples directory architecture. `examples/01_django/`
+  is a self-contained Django mini-project with its own `pyproject.toml`,
+  editable install of TenantShield, and separate virtualenv. Smoke test
+  runs `manage.py check` + `manage.py runserver` ephemeral validation.
+  Rejected alternatives: examples as Sphinx-rendered code blocks
+  (cannot be executed, drift undetected); examples as pytest fixtures
+  (couples example correctness to test suite, obscures the standalone-app
+  pattern users will follow).
+
+### Architectural Decision Records (pending tag)
+
+- **ADR-0003** -- Django 4.2 support via empirical CI testing rather than
+  django-stubs upstream declaration. See
+  `docs/adr/0003-django-4-2-empirical-support.md`. Sub-phase 2C pins
+  `django-stubs[compatible-mypy]>=6.0,<7.0` (declares Django 5.2 + 6.0)
+  while the CI matrix continues to include Django 4.2.30 with both
+  pytest and mypy steps as the empirical safety net for the 4.2 cell.
 
 ## [0.2.0-alpha.1] -- 2026-05-15
 
