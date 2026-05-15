@@ -61,6 +61,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, TypeVar
 
+from tenantshield.adapters.sqlalchemy.events import register_write_enforcement
 from tenantshield.exceptions import ConfigurationError
 
 if TYPE_CHECKING:
@@ -131,5 +132,7 @@ def tenant_aware(cls: T) -> T:
         raise ConfigurationError(msg)
 
     setattr(cls, _TENANT_AWARE_SENTINEL, True)
+
+    register_write_enforcement(cls)
 
     return cls
