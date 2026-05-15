@@ -405,6 +405,26 @@ wheels = [
 ]
 
 [[package]]
+name = "djangorestframework-stubs"
+version = "3.16.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django-stubs" },
+    { name = "types-pyyaml" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/30/84/fa0e31f763ee35152a418c2a456efdd8047a9da0f5909110147b70382191/djangorestframework_stubs-3.16.9.tar.gz", hash = "sha256:b1abb97490c90c85eabcd09b8ecbadae1b9360f21ad3021abf830227c0129697", size = 32798, upload-time = "2026-03-31T22:40:23.626Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5a/be/e53e3b89eaa30c21e036ae4d2ee88a92ef8cb43678400901748ddad870c5/djangorestframework_stubs-3.16.9-py3-none-any.whl", hash = "sha256:27b3e245d5f9c22ff6988d9e54388249f98f88608cc2b365b71e9f39dd096958", size = 57239, upload-time = "2026-03-31T22:40:22.314Z" },
+]
+
+[package.optional-dependencies]
+compatible-mypy = [
+    { name = "django-stubs", extra = ["compatible-mypy"] },
+    { name = "mypy" },
+]
+
+[[package]]
 name = "filelock"
 version = "3.29.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1360,6 +1380,7 @@ dev = [
     { name = "coverage", extra = ["toml"] },
     { name = "django" },
     { name = "django-stubs", extra = ["compatible-mypy"] },
+    { name = "djangorestframework-stubs", extra = ["compatible-mypy"] },
     { name = "hypothesis" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
@@ -1391,6 +1412,7 @@ requires-dist = [
     { name = "django", marker = "extra == 'django'", specifier = ">=4.2,<6.0" },
     { name = "django-stubs", extras = ["compatible-mypy"], marker = "extra == 'dev'", specifier = ">=5.2.9,<6.0" },
     { name = "djangorestframework", marker = "extra == 'drf'", specifier = ">=3.17.1,<4.0" },
+    { name = "djangorestframework-stubs", extras = ["compatible-mypy"], marker = "extra == 'dev'", specifier = ">=3.16.9,<4.0" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.112" },
     { name = "mkdocs-material", marker = "extra == 'dev'", specifier = ">=9.5,<10.0" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'dev'", specifier = ">=1.0,<2.0" },

@@ -37,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `django-stubs[compatible-mypy]>=6.0,<7.0` (declares Django 5.2 + 6.0)
   while the CI matrix continues to include Django 4.2.30 with both
   pytest and mypy steps as the empirical safety net for the 4.2 cell.
+- **ADR-0004** -- djangorestframework-stubs support via empirical CI
+  testing. Adopts pin
+  `djangorestframework-stubs[compatible-mypy]>=3.16.9,<4.0` for type-safe
+  DRF adapter under mypy strict mode. Direct parallel to ADR-0003: DRF
+  3.17.x is type-checked using drf-stubs 3.16.9 in practice (empirically
+  verified); upstream coverage classifiers do not declare specific DRF
+  version support. Materialized in Sub-fase 2C mini-task 2C.A.0.
 
 ## [0.2.0-alpha.1] -- 2026-05-15
 
