@@ -26,3 +26,6 @@ class TenantShieldConfig(AppConfig):
         from tenantshield.adapters.django import checks as ts_checks  # noqa: PLC0415
 
         checks.register(ts_checks.check_tenant_aware_models_have_tenant_field)
+        checks.register(ts_checks.check_middleware_strategy_configured)
+        checks.register(ts_checks.check_public_tenant_mode_visible)
+        checks.register(ts_checks.check_middleware_installed_for_tenant_aware_models)
