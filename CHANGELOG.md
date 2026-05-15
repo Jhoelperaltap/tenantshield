@@ -13,6 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `sqlalchemy>=2.0,<3.0`. Foundation for Phase 3 SQLAlchemy adapter
   (in progress).
 
+### Decision Records (pending tag)
+
+- **DR-024** -- SQLAlchemy bulk operations bypass mapper-scoped events.
+  `session.execute(insert(Foo).values([...]))`,
+  `session.execute(update(Foo).where(...).values(...))`, and
+  `session.execute(delete(Foo).where(...))` bypass the `before_insert`,
+  `before_update`, and `before_delete` events respectively. This is
+  SQLAlchemy's documented behavior for performance reasons.
+  Consequence: tenant enforcement on write paths is NOT applied to
+  bulk operations. Adopters using bulk patterns must manually validate
+  tenant coherence in application code. Read operations via
+  `session.execute(select(Foo))` are still filtered by
+  `do_orm_execute` event regardless of bulk or individual fetch
+  pattern. Pattern analogous to Django adapter's `_base_manager`
+  semantics. Materialized in Sub-fase 3A Tarea 3A.6 with empirical
+  evidence + 5 test cases documenting bypass behavior. See ADR-0007
+  consequences section.
+
 ### Architectural Decision Records (pending tag)
 
 - **ADR-0006** -- SQLAlchemy 2.0+ only; drops 1.4 support. Single
