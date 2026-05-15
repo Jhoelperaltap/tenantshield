@@ -160,8 +160,9 @@ omit = [
     # SA adapter scaffolding modules excluded from coverage until
     # integration tests cover them at end of Bloque B (3A.5). Pattern
     # paralelo a DRF adapter omit-revert in 2C.A.1 to 2C.A.5.
+    # decorator.py reverted in 3A.2 (tests added).
+    # __init__/events/exceptions remain omitted until 3A.5 omnibus revert.
     "src/tenantshield/adapters/sqlalchemy/__init__.py",
-    "src/tenantshield/adapters/sqlalchemy/decorator.py",
     "src/tenantshield/adapters/sqlalchemy/events.py",
     "src/tenantshield/adapters/sqlalchemy/exceptions.py",
 ]
