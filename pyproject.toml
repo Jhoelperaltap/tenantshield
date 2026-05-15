@@ -157,6 +157,13 @@ branch = true
 source = ["tenantshield"]
 omit = [
     "src/tenantshield/_version.py",
+    # SA adapter scaffolding modules excluded from coverage until
+    # integration tests cover them at end of Bloque B (3A.5). Pattern
+    # paralelo a DRF adapter omit-revert in 2C.A.1 to 2C.A.5.
+    "src/tenantshield/adapters/sqlalchemy/__init__.py",
+    "src/tenantshield/adapters/sqlalchemy/decorator.py",
+    "src/tenantshield/adapters/sqlalchemy/events.py",
+    "src/tenantshield/adapters/sqlalchemy/exceptions.py",
 ]
 
 [tool.coverage.report]
