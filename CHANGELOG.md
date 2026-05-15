@@ -7,50 +7,134 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Decision Records (pending tag)
+(Pending entries for Phase 3 SQLAlchemy adapter or subsequent work.)
 
-- **DR-019** -- DRF adapter triple-defense architecture. Three layers
-  composing the request lifecycle: (1) `IsSameTenant` permission for
-  request-level + object-level enforcement at the view boundary,
-  (2) `TenantAwareViewSetMixin` for ViewSet pre-filtering of `get_queryset`,
-  (3) `TenantValidatedSerializerMixin` for write-path tenant validation on
-  serializer save. Each layer is independent and fail-closed; presence of
-  any one would catch a leak, but the triple defense is intentional
-  per the deny-by-default architecture. Rejected alternatives:
-  permission-only (misses ViewSet pre-filtering optimization and
-  serializer write validation), middleware-only (DRF Router routes
-  bypass Django middleware paths in some configurations).
+## [0.2.0-alpha] -- 2026-05-15
+
+### Phase 2 summary
+
+Phase 2 of TenantShield delivers complete Django adapter coverage
+across the full request lifecycle. The release closes three sub-phases:
+
+- **Sub-phase 2A (`v0.2.0-alpha.0`)** -- ORM-level enforcement via
+  `@tenant_aware` decorator, `TenantAwareManager`,
+  `TenantAwareQuerySet`, and write-time signal handlers (`pre_save`,
+  `pre_delete`).
+- **Sub-phase 2B (`v0.2.0-alpha.1`)** -- `TenantContextMiddleware`
+  with composable extraction strategies (Header, Subdomain, JWT,
+  Callable) + Protocol contract + strategy resolver.
+- **Sub-phase 2C (this release)** -- DRF integration via three
+  independent enforcement layers (DR-019 triple defense), runnable
+  example mini-project, Django 6.0 matrix expansion, and ADR-0005
+  documenting meta-pattern for typeddjango ecosystem version
+  management.
+
+### Acceptance gates (8/8 met)
+
+- All 266 tests pass on Django 4.2.30 LTS / 5.2.14 / 6.0.4 (matrix
+  cycled locally; CI definition ready for future remote activation).
+- Coverage 99.88% global, greater than or equal to 95% per module
+  (gate greater than or equal to 95%).
+- mypy strict + pyright clean + ruff clean + 13/13 pre-commit hooks
+  green.
+- Public surface stable: 18 canonical imports verified working
+  (Core 4 + Django adapter 4 + Strategies 6 + DRF adapter 4).
+- Example mini-project boots and serves multi-tenant API per README
+  walkthrough.
+- 5 ADRs documenting architectural decisions (0001-0005).
+- 8 Decision Records added across Phase 2 (DR-013 through DR-020).
+- All sub-phase tags preserved (`v0.2.0-alpha.0`, `v0.2.0-alpha.1`).
+
+### Added (Sub-phase 2C)
+
+- DRF adapter at `tenantshield.adapters.drf`: 5 modules implementing
+  the DR-019 triple defense.
+  - `IsSameTenant` permission (request-level + object-level
+    enforcement at the view boundary).
+  - `TenantAwareViewSetMixin` (queryset-level enforcement when manager
+    is absent or bypassed via `_base_manager`).
+  - `TenantValidatedSerializerMixin` (write-path enforcement with
+    `to_internal_value` auto-inject + `create`/`update` mismatch
+    detection).
+  - `TenantPermissionDenied` DRF-adapter exception (HTTP 403 by
+    default via DRF default exception handler).
+- Optional dependency extra `[drf]` with `djangorestframework>=3.17.1,<4.0`.
+- `examples/01_django/` runnable mini-project demonstrating
+  end-to-end multi-tenant isolation with Django + DRF + TenantShield.
+  Includes `pyproject.toml`, `manage.py`, settings + URLs + WSGI/ASGI,
+  `Org` and `Invoice` models decorated with `@tenant_aware`,
+  serializers + viewsets + URL routes consuming the DRF adapter, and
+  a comprehensive README (curl walkthrough, architecture notes,
+  common gotchas).
+- 24 unit + integration tests for the DRF adapter at
+  `tests/integration/django/test_drf.py` (Permission + Mixin +
+  Serializer classes, plus 6 end-to-end tests via DRF `APIClient`
+  against the `testapp`).
+- 8 structural smoke tests for the example mini-project at
+  `tests/integration/examples/test_01_django.py`.
+- CI matrix expanded to 9 cells (Python 3.11 / 3.12 / 3.13 x
+  Django 4.2 / 5.2 / 6.0).
+
+### Decision Records (Sub-phase 2C)
+
+- **DR-019** -- DRF adapter triple-defense architecture. Three
+  independent layers acting at distinct points of the DRF request
+  lifecycle (Permission at request/object boundary, ViewSet Mixin at
+  queryset construction, Serializer Mixin at write-path validation),
+  NOT composable filters on a single queryset (architectural truth
+  discovered empirically during the 8 BLOCKERs of Block A; docstrings
+  document Pattern A vs Pattern B usage). Rejected alternatives:
+  permission-only (misses queryset bypass + write-path validation),
+  middleware-only (DRF Router paths can bypass Django middleware
+  in some configurations).
 - **DR-020** -- Examples directory architecture. `examples/01_django/`
-  is a self-contained Django mini-project with its own `pyproject.toml`,
-  editable install of TenantShield, and separate virtualenv. Smoke test
-  runs `manage.py check` + `manage.py runserver` ephemeral validation.
-  Rejected alternatives: examples as Sphinx-rendered code blocks
-  (cannot be executed, drift undetected); examples as pytest fixtures
-  (couples example correctness to test suite, obscures the standalone-app
-  pattern users will follow).
+  is a self-contained mini-project with its own `pyproject.toml`,
+  editable install of TenantShield, and dedicated venv. README
+  walkthrough is the canonical adopter reference. Numbered prefix
+  reserves space for future adapters (`02_sqlalchemy/`,
+  `03_celery/`).
 
-### Architectural Decision Records (pending tag)
+### Architectural Decision Records (ADR-0003 through ADR-0005)
 
-- **ADR-0003** -- Django 4.2 support via empirical CI testing rather than
-  django-stubs upstream declaration. See
-  `docs/adr/0003-django-4-2-empirical-support.md`. Sub-phase 2C pins
-  `django-stubs[compatible-mypy]>=6.0,<7.0` (declares Django 5.2 + 6.0)
-  while the CI matrix continues to include Django 4.2.30 with both
-  pytest and mypy steps as the empirical safety net for the 4.2 cell.
+- **ADR-0003** -- Django 4.2 LTS support via empirical CI testing,
+  not via django-stubs upstream declaration. See
+  `docs/adr/0003-django-4-2-empirical-support.md`. The CI matrix
+  includes the Django 4.2.30 cell with both pytest and mypy steps
+  as the empirical safety net.
 - **ADR-0004** -- djangorestframework-stubs support via empirical CI
-  testing. Adopts pin
-  `djangorestframework-stubs[compatible-mypy]>=3.16.9,<4.0` for type-safe
-  DRF adapter under mypy strict mode. Direct parallel to ADR-0003: DRF
-  3.17.x is type-checked using drf-stubs 3.16.9 in practice (empirically
-  verified); upstream coverage classifiers do not declare specific DRF
-  version support. Materialized in Sub-fase 2C mini-task 2C.A.0.
-- **ADR-0005** -- Tight upper bounds for typed-Django ecosystem pins
-  violating Rule 32. Adopts pin pattern `django>=4.2,<6.0.5` +
-  `django-stubs[compatible-mypy]>=6.0.3,<6.0.4` in Block C when latest
-  stables released <14 days. Documents meta-pattern for future
-  recurrences in typeddjango ecosystem (drf-stubs 3.16.9 in ADR-0004
-  was opportunistic; this is strategic). Materialized in Sub-fase 2C
-  Tarea 2C.C.1.
+  testing (parallel pattern to ADR-0003). Adopts pin
+  `djangorestframework-stubs[compatible-mypy]>=3.16.9,<4.0` for
+  type-safe DRF adapter coverage under mypy strict mode. DRF 3.17.x
+  is type-checked using drf-stubs 3.16.9 in practice; upstream
+  classifiers do not declare specific DRF version coverage. See
+  `docs/adr/0004-drf-stubs-empirical-support.md`.
+- **ADR-0005** -- Tight upper bounds strategy for typed-Django
+  ecosystem pins violating Rule 32 (greater than or equal to 14 days
+  for new dependencies). Sub-phase 2C Block C adopts
+  `django>=4.2,<6.0.5` + `django-stubs[compatible-mypy]>=6.0.3,<6.0.4`
+  because Django 6.0.5 (10 days at decision date) and django-stubs
+  6.0.4 (6 days) violated Rule 32 at the moment of pin widening.
+  Documents the recurring pattern (3+ instances in Sub-phase 2C
+  alone) for future recurrences in Phase 3+. See
+  `docs/adr/0005-tight-upper-bounds-strategy.md`.
+
+### Architecture milestones reached
+
+- Django adapter: complete (ORM in 2A + middleware in 2B + DRF
+  triple defense in 2C).
+- 3 supported Django versions (4.2 LTS + 5.2 + 6.0) verified across
+  the local matrix cycle.
+- 5 DRF adapter modules at 100% line + branch coverage.
+- Runnable mini-project demonstration available for adopters.
+- 5 architectural decision records (ADR-0001 through ADR-0005).
+- 8 decision records added across the phase (DR-013 through DR-020).
+
+### See also
+
+- See the `[0.2.0-alpha.0]` section below for full Sub-phase 2A
+  details (ORM + signals).
+- See the `[0.2.0-alpha.1]` section below for full Sub-phase 2B
+  details (middleware + extraction strategies).
 
 ## [0.2.0-alpha.1] -- 2026-05-15
 
