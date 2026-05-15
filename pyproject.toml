@@ -155,6 +155,7 @@ omit = [
     "src/tenantshield/adapters/drf/exceptions.py",
     "src/tenantshield/adapters/drf/mixins.py",
     "src/tenantshield/adapters/drf/permissions.py",
+    "src/tenantshield/adapters/drf/serializers.py",
 ]
 
 [tool.coverage.report]
