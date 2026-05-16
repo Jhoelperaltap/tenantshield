@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(Pending entries for Sub-fase 3B SQLAlchemy session middleware or
-subsequent work.)
+### Architectural Decision Records (pending tag)
+
+- **ADR-0008** -- Middleware lifecycle design pattern for SQLAlchemy
+  adapter. Two-layer architecture: `lifecycle.py` core (`SessionScope`
+  + `bind_session_to_tenant`) + `middleware.py` framework integration
+  (`TenantSessionMiddleware` ASGI/WSGI, materialization in Tareas
+  3B.3-4). ContextVar-based binding (Decision 5-B); callable-only
+  resolver (Decision 3 revised per BLOCKER #30). Three alternatives
+  considered + rejected (Session subclassing, event listeners, Phase
+  2B strategy reuse). Materialized in Sub-fase 3B Tarea 3B.2 after
+  empirical validation in Tareas 3B.0-re + 3B.1.
 
 ## [0.3.0-alpha.0] -- 2026-05-15
 

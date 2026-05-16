@@ -23,7 +23,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from tenantshield import TenantId, try_current_tenant
-from tenantshield.adapters.sqlalchemy import SessionScope, tenant_aware
+from tenantshield.adapters.sqlalchemy import (
+    SessionScope,
+    bind_session_to_tenant,
+    tenant_aware,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -190,3 +194,70 @@ class TestSessionScopeNesting:
             restored = try_current_tenant()
             assert restored is not None
             assert str(restored.tenant_id) == "outer"
+
+
+class TestBindSessionToTenantDirect:
+    """Verify bind_session_to_tenant with direct tenant argument."""
+
+    def test_str_tenant_binds_correctly(self) -> None:
+        with bind_session_to_tenant("acme"):
+            ctx = try_current_tenant()
+            assert ctx is not None
+            assert str(ctx.tenant_id) == "acme"
+
+    def test_tenant_id_object_accepted(self) -> None:
+        with bind_session_to_tenant(TenantId("globex")):
+            ctx = try_current_tenant()
+            assert ctx is not None
+            assert str(ctx.tenant_id) == "globex"
+
+    def test_scope_cleaned_up_after_block(self) -> None:
+        with bind_session_to_tenant("acme"):
+            assert try_current_tenant() is not None
+        assert try_current_tenant() is None
+
+    def test_none_tenant_raises_value_error(self) -> None:
+        with (
+            pytest.raises(ValueError, match="non-empty tenant"),
+            bind_session_to_tenant(None),
+        ):
+            pass
+
+    def test_empty_string_tenant_raises_value_error(self) -> None:
+        with (
+            pytest.raises(ValueError, match="non-empty tenant"),
+            bind_session_to_tenant(""),
+        ):
+            pass
+
+
+class TestBindSessionToTenantComposition:
+    """Verify bind_session_to_tenant composes with SessionScope."""
+
+    def test_nested_inside_session_scope_inner_overrides(self) -> None:
+        with SessionScope(tenant="outer"):
+            with bind_session_to_tenant("inner"):
+                inner_ctx = try_current_tenant()
+                assert inner_ctx is not None
+                assert str(inner_ctx.tenant_id) == "inner"
+
+            outer_ctx = try_current_tenant()
+            assert outer_ctx is not None
+            assert str(outer_ctx.tenant_id) == "outer"
+
+    def test_exception_inside_bind_cleans_scope(self) -> None:
+        with (  # noqa: PT012
+            pytest.raises(ValueError, match="simulated"),
+            bind_session_to_tenant("acme"),
+        ):
+            msg = "simulated"
+            raise ValueError(msg)
+
+        assert try_current_tenant() is None
+
+    def test_session_operations_inside_bind_enforced(self, session: Session) -> None:
+        with bind_session_to_tenant("acme"):
+            inv = _Invoice(amount=100)
+            session.add(inv)
+            session.commit()
+            assert inv.tenant_id == "acme"

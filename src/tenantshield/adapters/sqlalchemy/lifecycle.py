@@ -129,3 +129,81 @@ def SessionScope(  # noqa: N802 -- context manager presents as class-like to ado
     ctx = bind_tenant(tenant_id)
     with _tenant_scope(ctx):
         yield
+
+
+@contextmanager
+def bind_session_to_tenant(
+    tenant: TenantId | str | None,
+) -> Generator[None, None, None]:
+    """Explicitly bind a session-scoped tenant for SQLAlchemy operations.
+
+    Helper for adopters who need explicit tenant binding without the
+    callable-resolver flexibility of ``SessionScope``. Use cases:
+
+    - CLI scripts where tenant is determined from command-line args.
+    - Background workers processing tenant-specific jobs.
+    - Test fixtures with hardcoded tenant scopes.
+
+    Composable with ``SessionScope``: invoking
+    ``bind_session_to_tenant`` inside an active ``SessionScope`` block
+    creates a nested scope (inner tenant overrides outer; outer
+    restored on inner exit). Empirically validated in Tarea 3B.2.
+
+    Direct usage::
+
+        with bind_session_to_tenant("acme"):
+            with Session(engine) as s:
+                # All SA operations enforced with acme tenant
+                ...
+
+    Composition with SessionScope::
+
+        with SessionScope(resolve_tenant=from_request):
+            with bind_session_to_tenant("system_admin"):
+                # Override resolved tenant for specific block
+                ...
+
+    Difference from ``SessionScope``:
+
+    - ``SessionScope``: callable resolver + fall-through support.
+    - ``bind_session_to_tenant``: direct tenant only, no fall-through.
+
+    Both ultimately wrap ``tenantshield.tenant_scope``. Choose based
+    on whether tenant resolution is callable-driven (``SessionScope``)
+    or determined-up-front (``bind_session_to_tenant``).
+
+    Args:
+        tenant: Tenant identifier. Required, non-empty. Can be
+            ``TenantId`` or ``str`` (normalized internally via
+            ``TenantId(str(tenant))``). Type allows ``None`` for
+            adopter ergonomic safety (dynamic code might pass None);
+            None / empty raise ``ValueError`` with helpful guidance
+            toward ``SessionScope`` for fall-through use cases.
+
+    Yields:
+        None. Tenant scope is bound via ``tenant_scope`` internally;
+        adopters call ``try_current_tenant()`` to inspect.
+
+    Raises:
+        ValueError: If ``tenant`` is ``None`` or evaluates to empty
+            after string conversion. Helpful message points to
+            ``SessionScope`` as alternative for fall-through use cases.
+
+    See Also:
+        ``SessionScope``: more flexible context manager with resolver
+            callable support and fall-through semantics.
+        ``tenantshield.tenant_scope``: Phase 1 core API.
+    """
+    if tenant is None or not str(tenant):
+        msg = (
+            "bind_session_to_tenant requires a non-empty tenant. "
+            "For fall-through behavior (no scope bound), use "
+            "SessionScope with no arguments or resolve_tenant "
+            "returning None."
+        )
+        raise ValueError(msg)
+
+    tenant_id = TenantId(str(tenant))
+    ctx = bind_tenant(tenant_id)
+    with _tenant_scope(ctx):
+        yield
