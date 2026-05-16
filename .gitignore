@@ -52,3 +52,6 @@ PHASE_*_CLOSURE.md
 examples/*/staticfiles/
 examples/*/media/
 examples/*/local_settings.py
+
+# Examples lockfiles (each example resolves locally; Phase 2 precedent)
+examples/**/uv.lock
