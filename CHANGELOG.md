@@ -7,45 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+(Pending entries for Sub-fase 3B SQLAlchemy session middleware or
+subsequent work.)
+
+## [0.3.0-alpha.0] -- 2026-05-15
+
+Sub-fase 3A complete -- SQLAlchemy ORM enforcement core. Multi-tenant
+isolation for SQLAlchemy 2.0+ declarative models via mapper-scoped
+write events, session-scoped read filtering, and documented bypass
+semantics for raw SQL and bulk operations.
+
 ### Added
 
 - `tenantshield[sqlalchemy]` optional dependency extra declaring
-  `sqlalchemy>=2.0,<3.0`. Foundation for Phase 3 SQLAlchemy adapter
-  (in progress).
+  `sqlalchemy>=2.0,<3.0`. Foundation for the SQLAlchemy adapter.
+- `tenantshield.adapters.sqlalchemy` module with public surface:
+  - `tenant_aware` decorator for SQLAlchemy declarative model classes.
+    Validates `tenant_id` column presence at class-definition time
+    (fail-fast `ConfigurationError` if missing) and registers mapper
+    event listeners for write enforcement.
+  - `MissingTenantContextError` re-exported from
+    `tenantshield.exceptions` for ergonomic adapter-local import.
+  - `CrossTenantAccessError` re-exported from
+    `tenantshield.exceptions` for ergonomic adapter-local import.
+- SQLAlchemy adapter modules: `decorator.py`, `events.py`,
+  `exceptions.py`. All at 97.6-100% coverage.
 
-### Decision Records (pending tag)
+### Decision Records
 
+- **DR-021** -- Write enforcement via mapper-scoped events
+  (`before_insert`, `before_update`, `before_delete`). Auto-injects
+  `tenant_id` on INSERT from the active scope when the attribute is
+  unset; raises `CrossTenantAccessError` on cross-tenant write
+  attempts (mismatched explicit `tenant_id` vs active scope) and
+  `MissingTenantContextError` when no scope is active. Materialized
+  incrementally in Tareas 3A.3 (INSERT, auto-inject path) and 3A.4
+  (UPDATE + DELETE, validation-only paths).
+- **DR-022** -- Read enforcement via session-scoped `do_orm_execute`
+  event with `with_loader_criteria` injection. Filters ORM SELECT
+  statements on tenant-aware models by the active scope. Fall-through
+  on missing scope (no filtering applied) matches kickoff §3 design;
+  stricter raise-on-missing behavior is provided by middleware in
+  Sub-fase 3B. Uses a static SQL expression rather than a lambda
+  because SQLAlchemy caches loader-criteria lambdas by body and
+  ignores closure variables (architectural gotcha documented in
+  ADR-0007). Materialized in Tarea 3A.5.
 - **DR-023** -- SQLAlchemy raw SQL via `text()` bypasses ALL tenant
-  enforcement layers. Raw SQL statements skip `do_orm_execute` filter
-  injection (handler guard:
-  `if not (state.is_select and state.is_orm_statement): return`) and
-  skip mapper-scoped events (`before_insert`, `before_update`,
-  `before_delete`) because text statements do not trigger mapper
+  enforcement layers. Raw statements skip `do_orm_execute` filter
+  injection (handler guards on `is_orm_statement`) and skip
+  mapper-scoped events because text statements do not trigger mapper
   machinery. This is an intentional architectural constraint matching
-  Django adapter's `_base_manager` semantics. Raw SQL is the documented
-  escape hatch for adopter operations requiring full control. Adopters
-  using `session.execute(text("..."))` inherit complete responsibility
-  for tenant coherence; library cannot enforce safety on opaque SQL
-  text. Pattern analogous to DR-024 (bulk operations bypass mapper
-  events). Together, DR-023 + DR-024 establish the bypass semantics
-  surface for the SQLAlchemy adapter. Materialized in Sub-fase 3A
-  Tarea 3A.7 with empirical evidence + 9 test cases documenting bypass
-  behavior. See ADR-0007 consequences section.
-- **DR-024** -- SQLAlchemy bulk operations bypass mapper-scoped events.
-  `session.execute(insert(Foo).values([...]))`,
+  Django adapter's `_base_manager` semantics: raw SQL is the
+  documented escape hatch for adopter operations requiring full
+  control. Adopters using `session.execute(text("..."))` inherit
+  complete responsibility for tenant coherence. Materialized in
+  Tarea 3A.7 with empirical evidence + 8 test cases documenting
+  bypass behavior. See ADR-0007 consequences section.
+- **DR-024** -- SQLAlchemy bulk operations bypass mapper-scoped
+  events. `session.execute(insert(Foo).values([...]))`,
   `session.execute(update(Foo).where(...).values(...))`, and
-  `session.execute(delete(Foo).where(...))` bypass the `before_insert`,
-  `before_update`, and `before_delete` events respectively. This is
-  SQLAlchemy's documented behavior for performance reasons.
-  Consequence: tenant enforcement on write paths is NOT applied to
-  bulk operations. Adopters using bulk patterns must manually validate
-  tenant coherence in application code. Read operations via
-  `session.execute(select(Foo))` are still filtered by
-  `do_orm_execute` event regardless of bulk or individual fetch
-  pattern. Pattern analogous to Django adapter's `_base_manager`
-  semantics. Materialized in Sub-fase 3A Tarea 3A.6 with empirical
-  evidence + 5 test cases documenting bypass behavior. See ADR-0007
-  consequences section.
+  `session.execute(delete(Foo).where(...))` bypass the
+  `before_insert`, `before_update`, and `before_delete` events
+  respectively. This is SQLAlchemy's documented behavior for
+  performance reasons. Consequence: tenant enforcement on write
+  paths is NOT applied to bulk operations. Adopters using bulk
+  patterns must manually validate tenant coherence. Read operations
+  via `session.execute(select(Foo))` are still filtered regardless
+  of bulk or individual fetch pattern. Materialized in Tarea 3A.6
+  with empirical evidence + 5 test cases.
 - **DR-025** -- SQLAlchemy adapter enforcement fires at flush time,
   not at `session.add()` / `session.delete()` time. Implications:
   tenant scope must be active at flush (whether explicit
@@ -53,36 +82,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   during `session.commit()`); scope changes between `add()` and
   `flush()` use the scope active AT FLUSH TIME (auto-injection
   reflects flush-time scope, not add-time scope); autoflush (default
-  in SA 2.0) triggers events before SELECT queries, so tenant scope
-  must be active for queries with pending writes; expunged instances
-  (`session.expunge()`) do not fire events because the instance is
-  no longer tracked by the session. Adopter guidance: keep tenant
-  scope active throughout session operations, not only during
-  instance construction. Pattern paralelo a Django adapter's signal
-  firing at `model.save()` time; SA adapter's flush-time firing
-  matches SA's session lifecycle. Together with DR-021 (write
-  enforcement) and DR-022 (read enforcement), DR-025 establishes the
-  complete timing semantics of the adapter. Materialized in Sub-fase
-  3A Tarea 3A.9 with empirical evidence + 7 test cases across flush,
-  autoflush, commit, and expunge timing points. See ADR-0007
-  (event-based enforcement) for related architectural context.
+  in SA 2.0) triggers events before SELECT queries with pending
+  writes; expunged instances (`session.expunge()`) do not fire
+  events. Adopter guidance: keep tenant scope active throughout
+  session operations, not only during instance construction. Pattern
+  paralelo a Django adapter's signal firing at `model.save()` time;
+  SA adapter's flush-time firing matches SA's session lifecycle.
+  Together with DR-021 (write enforcement) and DR-022 (read
+  enforcement), DR-025 establishes the complete timing semantics of
+  the adapter. Materialized in Tarea 3A.9 with empirical evidence +
+  7 test cases across flush, autoflush, commit, and expunge timing
+  points.
 
-### Architectural Decision Records (pending tag)
+### Architectural Decision Records
 
 - **ADR-0006** -- SQLAlchemy 2.0+ only; drops 1.4 support. Single
   major-version target simplifies adapter implementation; PEP 561
-  inline typing eliminates need for parallel stubs package.
-  Materialized in Sub-fase 3A Tarea 3A.0.
+  inline typing in SA 2.0+ eliminates need for a parallel stubs
+  package. Materialized in Tarea 3A.0.
 - **ADR-0007** -- Event-based enforcement for SQLAlchemy adapter.
   Materializes Decision 4-A from PHASE_3A_KICKOFF.md. Three event
   mechanisms compose tenant enforcement:
   `before_insert`/`before_update`/`before_delete` mapper-scoped
   events for writes; `do_orm_execute` session-scoped event for
   reads via `with_loader_criteria` injection (static SQL expression,
-  not lambda — SA caches loader-criteria lambdas by body and ignores
+  not lambda -- SA caches loader-criteria lambdas by body and ignores
   closure variables). Reads fall through on missing scope; stricter
   raise-on-missing behavior provided by middleware in Sub-fase 3B.
-  Materialized evidence-based in Sub-fase 3A Tarea 3A.5.
+  Materialized in Tarea 3A.5.
+
+### Acceptance gates (Sub-fase 3A)
+
+- 324 tests passing on canonical Python 3.13 / SA 2.0.49.
+- Coverage 99.67% global (gate `>= 95%`). 0.21 points below kickoff
+  §6 99.88% aspirational target due to 1 missing defensive branch in
+  `do_orm_execute` handler (`entity is None` edge case in
+  `column_descriptions` iteration; hard to trigger via SA's public
+  API). Documented gap; accepted per Tarea 3A.5 Option A.
+- mypy strict + pyright clean + ruff clean + 13/13 pre-commit hooks
+  green.
+- Public surface stable: 21 canonical imports verified working
+  (Phase 2's 18 + SA adapter's 3).
+- 5 SA adapter modules at 97.6-100% coverage
+  (`__init__.py`, `decorator.py`, `events.py`, `exceptions.py`,
+  plus `__init__.py` re-exports).
+- 5 Decision Records added (DR-021 through DR-025) documenting the
+  complete enforcement surface (writes + reads + bypass semantics +
+  timing).
+- 2 Architectural Decision Records added (ADR-0006, ADR-0007)
+  documenting SA 2.0+ pin and event-based enforcement strategy.
+
+### Architecture milestones reached
+
+- SQLAlchemy ORM enforcement complete: writes (auto-inject + reject
+  cross-tenant) and reads (filter by scope) covered by event-based
+  architecture.
+- Cross-adapter coherence with Django adapter preserved: same
+  exception hierarchy (`MissingTenantContextError`,
+  `CrossTenantAccessError`), same `operation` identifier format
+  (`<event>.<Model>`), same bypass-as-escape-hatch semantics for
+  out-of-ORM operations.
+- Empirical methodology refinement: lambda caching caveat in
+  `with_loader_criteria` documented as architectural gotcha
+  (ADR-0007); future SQLAlchemy adapter work uses static SQL
+  expressions, not closure-capturing lambdas.
+
+### See also
+
+- `docs/adr/0006-sqlalchemy-2-0-only.md`
+- `docs/adr/0007-event-based-enforcement.md`
 
 ## [0.2.0-alpha] -- 2026-05-15
 
