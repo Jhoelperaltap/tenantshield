@@ -30,6 +30,9 @@ from tenantshield.adapters.sqlalchemy.exceptions import (
     MissingTenantContextError,
 )
 
+# lifecycle.SessionScope + middleware.TenantSessionMiddleware
+# exported in Tareas 3B.1-4.
+
 __all__ = [
     "CrossTenantAccessError",
     "MissingTenantContextError",
