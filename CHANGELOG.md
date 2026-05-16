@@ -15,6 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Decision Records (pending tag)
 
+- **DR-023** -- SQLAlchemy raw SQL via `text()` bypasses ALL tenant
+  enforcement layers. Raw SQL statements skip `do_orm_execute` filter
+  injection (handler guard:
+  `if not (state.is_select and state.is_orm_statement): return`) and
+  skip mapper-scoped events (`before_insert`, `before_update`,
+  `before_delete`) because text statements do not trigger mapper
+  machinery. This is an intentional architectural constraint matching
+  Django adapter's `_base_manager` semantics. Raw SQL is the documented
+  escape hatch for adopter operations requiring full control. Adopters
+  using `session.execute(text("..."))` inherit complete responsibility
+  for tenant coherence; library cannot enforce safety on opaque SQL
+  text. Pattern analogous to DR-024 (bulk operations bypass mapper
+  events). Together, DR-023 + DR-024 establish the bypass semantics
+  surface for the SQLAlchemy adapter. Materialized in Sub-fase 3A
+  Tarea 3A.7 with empirical evidence + 9 test cases documenting bypass
+  behavior. See ADR-0007 consequences section.
 - **DR-024** -- SQLAlchemy bulk operations bypass mapper-scoped events.
   `session.execute(insert(Foo).values([...]))`,
   `session.execute(update(Foo).where(...).values(...))`, and
