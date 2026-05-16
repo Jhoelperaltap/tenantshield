@@ -36,13 +36,18 @@ from typing import TYPE_CHECKING, Any
 from tenantshield.adapters.sqlalchemy.lifecycle import SessionScope
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Iterable
 
     ASGIScope = dict[str, Any]
     ASGIReceive = Callable[[], Awaitable[dict[str, Any]]]
     ASGISend = Callable[[dict[str, Any]], Awaitable[None]]
     ASGIApp = Callable[[ASGIScope, ASGIReceive, ASGISend], Awaitable[None]]
     ASGIResolveTenant = Callable[[ASGIScope], Any]
+
+    WSGIEnviron = dict[str, Any]
+    WSGIStartResponse = Callable[[str, list[tuple[str, str]]], Callable[..., None]]
+    WSGIApp = Callable[[WSGIEnviron, WSGIStartResponse], Iterable[bytes]]
+    WSGIResolveTenant = Callable[[WSGIEnviron], Any]
 
 
 class TenantSessionMiddleware:
@@ -151,3 +156,113 @@ class TenantSessionMiddleware:
 
         with SessionScope(tenant=tenant):
             await self.app(scope, receive, send)
+
+
+class TenantSessionMiddlewareWSGI:
+    """WSGI middleware binding tenant context per request.
+
+    Wraps a WSGI application with tenant scope establishment for the
+    duration of each request. Uses ``lifecycle.SessionScope``
+    internally to bind tenant context.
+
+    Generator-based response iteration (``yield from``) ensures
+    ``SessionScope`` remains active during full response body
+    iteration, NOT just during application invocation. Critical for
+    streaming responses where adopter app yields chunks lazily.
+
+    Empirically validated in Tarea 3B.4: a naive ``return self.app(...)``
+    inside a ``with SessionScope(...)`` block exits scope BEFORE the
+    caller iterates the response body. The ``yield from`` pattern
+    makes ``__call__`` a generator that enters scope on first
+    iteration and exits after the last chunk.
+
+    Example::
+
+        from tenantshield.adapters.sqlalchemy import (
+            TenantSessionMiddlewareWSGI,
+        )
+
+        def resolve_tenant(environ):
+            return environ.get("HTTP_X_TENANT_ID")
+
+        app = TenantSessionMiddlewareWSGI(
+            wsgi_app,
+            resolve_tenant=resolve_tenant,
+        )
+
+    Adopters using Flask / Django (WSGI mode) / Gunicorn register
+    via framework conventions::
+
+        # Flask
+        flask_app.wsgi_app = TenantSessionMiddlewareWSGI(
+            flask_app.wsgi_app,
+            resolve_tenant=resolve_tenant,
+        )
+
+        # Django (deployed via WSGI). In wsgi.py:
+        from django.core.wsgi import get_wsgi_application
+        application = TenantSessionMiddlewareWSGI(
+            get_wsgi_application(),
+            resolve_tenant=resolve_tenant,
+        )
+
+    WSGI environ header format: ``HTTP_<UPPERCASE_NAME>`` string
+    keys with string values. Header ``X-Tenant-ID`` -> environ key
+    ``HTTP_X_TENANT_ID``. Resolver callable receives raw environ
+    dict.
+
+    Args:
+        app: The inner WSGI application to wrap.
+        resolve_tenant: Callable that extracts tenant from WSGI
+            environ dict. Returns ``TenantId``, ``str``, or
+            ``None``. If ``None``, request proceeds without tenant
+            scope binding (fall-through, per DR-022 standalone
+            semantics; stricter behavior in Tarea 3B.5).
+
+    Raises:
+        TypeError: If ``resolve_tenant`` is not callable.
+
+    Notes:
+        For ASGI applications (FastAPI, Starlette), use
+        ``TenantSessionMiddleware`` instead.
+
+    See Also:
+        ``TenantSessionMiddleware``: ASGI variant.
+        ``SessionScope``: core context manager used internally.
+        ``ADR-0008``: middleware lifecycle design pattern.
+    """
+
+    def __init__(
+        self,
+        app: WSGIApp,
+        *,
+        resolve_tenant: WSGIResolveTenant,
+    ) -> None:
+        if not callable(resolve_tenant):
+            # Defensive runtime guard against type-system violations
+            # (adopters bypassing type annotations); mypy considers
+            # this unreachable per signature, but the check stays as
+            # a foot-gun mitigation for dynamic / untyped callers.
+            msg = (  # type: ignore[unreachable]
+                f"resolve_tenant must be callable, got {type(resolve_tenant).__name__}"
+            )
+            raise TypeError(msg)
+        self.app = app
+        self.resolve_tenant = resolve_tenant
+
+    def __call__(
+        self,
+        environ: WSGIEnviron,
+        start_response: WSGIStartResponse,
+    ) -> Iterable[bytes]:
+        """WSGI 1.0.1 entry point.
+
+        Wraps the inner app with tenant scope binding. Uses
+        ``yield from`` to keep ``SessionScope`` active during
+        response body iteration -- critical for streaming responses
+        where the inner app generates chunks lazily.
+        """
+        tenant = self.resolve_tenant(environ)
+
+        with SessionScope(tenant=tenant):
+            yield from self.app(environ, start_response)

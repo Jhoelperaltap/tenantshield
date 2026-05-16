@@ -11,6 +11,7 @@ Provides multi-tenant ORM enforcement for SQLAlchemy 2.0+ models via:
 - ``bind_session_to_tenant`` explicit tenant binding helper
   (Sub-fase 3B).
 - ``TenantSessionMiddleware`` ASGI middleware (Sub-fase 3B).
+- ``TenantSessionMiddlewareWSGI`` WSGI middleware (Sub-fase 3B).
 
 This adapter targets SQLAlchemy 2.0+ only (see ADR-0006 for rationale).
 Adopters running SQLAlchemy 1.4 must upgrade to 2.0 before using
@@ -25,6 +26,9 @@ Public surface
 - :func:`bind_session_to_tenant` -- explicit tenant binding helper.
 - :class:`TenantSessionMiddleware` -- ASGI middleware wrapping
   request handling with tenant scope.
+- :class:`TenantSessionMiddlewareWSGI` -- WSGI middleware wrapping
+  request handling with tenant scope; generator-based body
+  iteration preserves scope through lazy chunks.
 
 Exceptions (re-exported from core):
 
@@ -43,13 +47,17 @@ from tenantshield.adapters.sqlalchemy.lifecycle import (
     SessionScope,
     bind_session_to_tenant,
 )
-from tenantshield.adapters.sqlalchemy.middleware import TenantSessionMiddleware
+from tenantshield.adapters.sqlalchemy.middleware import (
+    TenantSessionMiddleware,
+    TenantSessionMiddlewareWSGI,
+)
 
 __all__ = [
     "CrossTenantAccessError",
     "MissingTenantContextError",
     "SessionScope",
     "TenantSessionMiddleware",
+    "TenantSessionMiddlewareWSGI",
     "bind_session_to_tenant",
     "tenant_aware",
 ]
