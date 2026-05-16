@@ -7,47 +7,125 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Decision Records (pending tag)
+(Pending entries for Sub-fase 3C SQLAlchemy examples or subsequent
+work.)
+
+## [0.3.0-alpha.1] -- 2026-05-16
+
+Sub-fase 3B complete -- SQLAlchemy session middleware. Framework-
+agnostic session lifecycle binding via `SessionScope` context manager
+and `bind_session_to_tenant` helper, plus ASGI/WSGI middleware classes
+(`TenantSessionMiddleware` / `TenantSessionMiddlewareWSGI`) with
+optional strict enforcement via `on_missing_tenant='raise'`
+configuration.
+
+### Added
+
+- `tenantshield.adapters.sqlalchemy.SessionScope` context manager
+  with direct tenant binding or callable-resolver pattern. Fall-
+  through semantics on missing scope per DR-022 standalone behavior.
+- `tenantshield.adapters.sqlalchemy.bind_session_to_tenant` explicit
+  tenant binding helper. Composable with `SessionScope` for nested
+  binding semantics (inner-override, outer-restore-on-exit).
+- `tenantshield.adapters.sqlalchemy.TenantSessionMiddleware` ASGI
+  middleware. Wraps inner app with tenant scope established via
+  `SessionScope` internally. ContextVar copy semantics preserve
+  scope across `await` boundaries (asyncio per-task context copy).
+  HTTP-only binding; websocket / lifespan scopes pass through.
+- `tenantshield.adapters.sqlalchemy.TenantSessionMiddlewareWSGI`
+  WSGI middleware. Generator-based pattern (`yield from`) preserves
+  `SessionScope` during full response body iteration (critical for
+  streaming responses; naive `return` pattern exits scope before
+  iteration begins).
+- `on_missing_tenant` middleware configuration parameter accepting
+  `'allow_unrestricted'` (default; backwards-compatible fall-through)
+  or `'raise'` (strict mode raising `MissingTenantContextError` when
+  resolver returns `None`). Applies to both ASGI and WSGI variants.
+
+### Decision Records
 
 - **DR-026** -- Middleware-managed strict enforcement for SQLAlchemy
-  adapter. Two-mode behavior when `resolve_tenant` returns `None`:
-  - `on_missing_tenant='allow_unrestricted'` (default): fall-through.
-    No tenant scope bound; SA operations proceed without filtering.
-    Backwards-compatible with SA adapter standalone behavior (DR-022).
-  - `on_missing_tenant='raise'`: middleware raises
-    `MissingTenantContextError` before invoking inner application.
-    Strict mode for adopters requiring guaranteed tenant context on
-    all requests.
-
-  Applies to both `TenantSessionMiddleware` (ASGI) and
-  `TenantSessionMiddlewareWSGI` (WSGI). Materializes the
+  adapter. Two-mode behavior on missing tenant:
+  `on_missing_tenant='allow_unrestricted'` (default, fall-through per
+  DR-022 backwards-compat) or `on_missing_tenant='raise'` (strict,
+  `MissingTenantContextError`). Applies to both `TenantSessionMiddleware`
+  (ASGI) and `TenantSessionMiddlewareWSGI` (WSGI). Materializes the
   deferred-from-Sub-fase-3A DR-022 strict-behavior promise per
-  Decision 4-C from Phase 3B kickoff.
+  Decision 4-C from Phase 3B kickoff. Cross-adapter naming alignment
+  with Django adapter `TenantContextMiddleware` (Sub-fase 2B
+  precedent); semantic divergence acknowledged -- Django default is
+  `'raise'` (no standalone path); SA default is `'allow_unrestricted'`
+  (preserves DR-022 standalone fall-through). Materialized in Tarea
+  3B.5.
 
-  Pattern: middleware as opt-in stricter enforcement layer. Adopter
-  mental model: SA adapter standalone = fall-through; middleware-
-  wrapped = configurable enforcement strictness. Cross-adapter
-  naming alignment: parameter name `on_missing_tenant` matches
-  Django adapter `TenantContextMiddleware` (Sub-fase 2B); semantic
-  divergence acknowledged -- Django default is `'raise'` (no
-  standalone path); SA default is `'allow_unrestricted'` (preserves
-  DR-022 standalone fall-through).
-
-  Materialized in Sub-fase 3B Tarea 3B.5 with empirical evidence +
-  8 test cases (4 per middleware class) covering both modes,
-  invalid-value validation, and proceed-on-valid-tenant behavior.
-
-### Architectural Decision Records (pending tag)
+### Architectural Decision Records
 
 - **ADR-0008** -- Middleware lifecycle design pattern for SQLAlchemy
   adapter. Two-layer architecture: `lifecycle.py` core (`SessionScope`
   + `bind_session_to_tenant`) + `middleware.py` framework integration
-  (`TenantSessionMiddleware` ASGI/WSGI, materialization in Tareas
-  3B.3-4). ContextVar-based binding (Decision 5-B); callable-only
-  resolver (Decision 3 revised per BLOCKER #30). Three alternatives
-  considered + rejected (Session subclassing, event listeners, Phase
-  2B strategy reuse). Materialized in Sub-fase 3B Tarea 3B.2 after
-  empirical validation in Tareas 3B.0-re + 3B.1.
+  (`TenantSessionMiddleware` ASGI + `TenantSessionMiddlewareWSGI`
+  WSGI). ContextVar-based binding (Decision 5-B from Phase 3B
+  kickoff). Callable-only resolver pattern (Decision 3 revised per
+  BLOCKER #30: Phase 2B strategies empirically Django-bound;
+  cross-adapter strategy unification deferred to dedicated future
+  sub-fase or Phase 4). Three alternatives rejected with rationale:
+  SA Session subclassing (breaks framework-agnostic design), SA
+  event-listener binding (lazy-begin timing unreliable; couples
+  scope to SA transaction lifecycle), Protocol abstraction for Phase
+  2B strategy reuse (scope expansion + Django adapter regression
+  risk). Materialized in Tarea 3B.2 evidence-based after empirical
+  validation in Tareas 3B.0-re + 3B.1.
+
+### Acceptance gates (Sub-fase 3B)
+
+- 367 tests passing on canonical Python 3.13 + SA 2.0.49 (+43 vs
+  Sub-fase 3A closure's 324).
+- Coverage 99.70% global (gate `>= 95%`; improved +0.03 vs Sub-fase
+  3A closure's 99.67%). Both Sub-fase 3B productive modules
+  (`lifecycle.py`, `middleware.py`) at 100% lines + branches.
+  `events.py` retains 97.62% (pre-existing entity-is-None defensive
+  null-check, accepted per 3A.5 Option A).
+- mypy strict + pyright clean + ruff clean + 13/13 pre-commit hooks
+  green.
+- Public surface stable: 25 canonical imports (Phase 2's 18 + SA
+  adapter's 7; +4 from Sub-fase 3B: `SessionScope`,
+  `bind_session_to_tenant`, `TenantSessionMiddleware`,
+  `TenantSessionMiddlewareWSGI`).
+- 2 new SA adapter modules at 100% coverage (`lifecycle.py` 31 stmts
+  + `middleware.py` 43 stmts).
+- 1 Decision Record added (DR-026 strict enforcement).
+- 1 Architectural Decision Record added (ADR-0008 middleware
+  lifecycle design).
+
+### Architecture milestones reached
+
+- SQLAlchemy session lifecycle binding complete (framework-agnostic
+  `SessionScope` + explicit `bind_session_to_tenant` helper).
+- ASGI + WSGI middleware classes shipped with optional strict
+  enforcement. Adopter framework targets supported: FastAPI,
+  Starlette, Flask, Django (WSGI mode), Gunicorn, Uvicorn.
+- Cross-adapter parameter naming alignment with Django adapter
+  (`on_missing_tenant` consistent across SA + Django middleware).
+- Empirical methodology refinements:
+  - ContextVar copy semantics across `await` boundaries verified
+    (asyncio per-task `copy_context()`).
+  - WSGI iterable scope semantics: generator pattern (`yield from`)
+    canonical for streaming-safe middleware; naive `return` pattern
+    exits scope before iteration (critical empirical finding in
+    Tarea 3B.4).
+  - Phase 2B strategies empirically confirmed Django-bound;
+    cross-adapter strategy unification deferred per BLOCKER #30.
+  - `TenantId` NewType isinstance limitation (canonical
+    normalization via `TenantId(str(...))`; discovered in Tarea
+    3B.1).
+
+### See also
+
+- `docs/adr/0006-sqlalchemy-2-0-only.md`
+- `docs/adr/0007-event-based-enforcement.md`
+- `docs/adr/0008-middleware-lifecycle-design.md`
+- DR-022 (read enforcement fall-through; resolved by DR-026 strict-
+  mode opt-in for middleware-wrapped contexts).
 
 ## [0.3.0-alpha.0] -- 2026-05-15
 
