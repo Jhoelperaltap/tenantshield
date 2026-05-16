@@ -23,6 +23,7 @@ import pytest
 
 from tenantshield import TenantId, try_current_tenant
 from tenantshield.adapters.sqlalchemy import TenantSessionMiddleware
+from tenantshield.exceptions import MissingTenantContextError
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -231,3 +232,81 @@ class TestTenantSessionMiddlewareTenantIdAcceptance:
         asyncio.run(run())
 
         assert captured == ["acme"]
+
+
+class TestTenantSessionMiddlewareStrictMode:
+    """Verify on_missing_tenant strict enforcement (ASGI). DR-026."""
+
+    def test_default_mode_is_allow_unrestricted(self) -> None:
+        """Default behavior fall-through preserved (DR-022 backwards-compat)."""
+        captured: list[str | None] = []
+
+        async def inner_app(_scope: Any, _receive: Any, _send: Any) -> None:
+            ctx = try_current_tenant()
+            captured.append(str(ctx.tenant_id) if ctx else None)
+
+        middleware = TenantSessionMiddleware(inner_app, resolve_tenant=lambda _scope: None)
+
+        async def run() -> None:
+            _, send = _make_send()
+            await middleware(_make_http_scope(), _noop_receive, send)
+
+        asyncio.run(run())
+
+        assert captured == [None]
+
+    def test_strict_mode_raises_on_none_tenant(self) -> None:
+        """on_missing_tenant='raise' triggers MissingTenantContextError."""
+
+        async def inner_app(_scope: Any, _receive: Any, _send: Any) -> None:
+            pass
+
+        middleware = TenantSessionMiddleware(
+            inner_app,
+            resolve_tenant=lambda _scope: None,
+            on_missing_tenant="raise",
+        )
+
+        async def run() -> None:
+            _, send = _make_send()
+            await middleware(_make_http_scope(), _noop_receive, send)
+
+        with pytest.raises(MissingTenantContextError) as exc_info:
+            asyncio.run(run())
+
+        assert "TenantSessionMiddleware" in exc_info.value.operation
+
+    def test_strict_mode_with_valid_tenant_proceeds(self) -> None:
+        """Strict mode + valid tenant: middleware proceeds normally."""
+        captured: list[str | None] = []
+
+        async def inner_app(_scope: Any, _receive: Any, _send: Any) -> None:
+            ctx = try_current_tenant()
+            captured.append(str(ctx.tenant_id) if ctx else None)
+
+        middleware = TenantSessionMiddleware(
+            inner_app,
+            resolve_tenant=lambda _scope: "acme",
+            on_missing_tenant="raise",
+        )
+
+        async def run() -> None:
+            _, send = _make_send()
+            await middleware(_make_http_scope(), _noop_receive, send)
+
+        asyncio.run(run())
+
+        assert captured == ["acme"]
+
+    def test_invalid_on_missing_tenant_value_raises(self) -> None:
+        """Construction validates on_missing_tenant value."""
+
+        async def fake_app(_scope: Any, _receive: Any, _send: Any) -> None:
+            pass
+
+        with pytest.raises(ValueError, match="on_missing_tenant must be"):
+            TenantSessionMiddleware(
+                fake_app,
+                resolve_tenant=lambda _scope: None,
+                on_missing_tenant="invalid_value",  # type: ignore[arg-type]
+            )

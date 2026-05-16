@@ -31,9 +31,13 @@ See ADR-0008 (middleware lifecycle design pattern).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from tenantshield.adapters.sqlalchemy.lifecycle import SessionScope
+from tenantshield.exceptions import MissingTenantContextError
+
+_VALID_ON_MISSING = ("allow_unrestricted", "raise")
+OnMissingTenant = Literal["allow_unrestricted", "raise"]
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable
@@ -123,6 +127,7 @@ class TenantSessionMiddleware:
         app: ASGIApp,
         *,
         resolve_tenant: ASGIResolveTenant,
+        on_missing_tenant: OnMissingTenant = "allow_unrestricted",
     ) -> None:
         if not callable(resolve_tenant):
             # Defensive runtime guard against type-system violations
@@ -133,8 +138,15 @@ class TenantSessionMiddleware:
                 f"resolve_tenant must be callable, got {type(resolve_tenant).__name__}"
             )
             raise TypeError(msg)
+        if on_missing_tenant not in _VALID_ON_MISSING:
+            msg = (
+                f"on_missing_tenant must be 'allow_unrestricted' or 'raise', "
+                f"got {on_missing_tenant!r}"
+            )
+            raise ValueError(msg)
         self.app = app
         self.resolve_tenant = resolve_tenant
+        self.on_missing_tenant: OnMissingTenant = on_missing_tenant
 
     async def __call__(
         self,
@@ -153,6 +165,21 @@ class TenantSessionMiddleware:
             return
 
         tenant = self.resolve_tenant(scope)
+
+        if tenant is None and self.on_missing_tenant == "raise":
+            raise MissingTenantContextError(
+                operation="TenantSessionMiddleware.asgi",
+                stack_context={
+                    "hint": (
+                        "Middleware configured with on_missing_tenant='raise' "
+                        "but resolve_tenant returned None. Either return a "
+                        "valid tenant from resolve_tenant or set "
+                        "on_missing_tenant='allow_unrestricted'."
+                    ),
+                    "scope_type": scope.get("type"),
+                    "scope_path": scope.get("path"),
+                },
+            )
 
         with SessionScope(tenant=tenant):
             await self.app(scope, receive, send)
@@ -237,6 +264,7 @@ class TenantSessionMiddlewareWSGI:
         app: WSGIApp,
         *,
         resolve_tenant: WSGIResolveTenant,
+        on_missing_tenant: OnMissingTenant = "allow_unrestricted",
     ) -> None:
         if not callable(resolve_tenant):
             # Defensive runtime guard against type-system violations
@@ -247,8 +275,15 @@ class TenantSessionMiddlewareWSGI:
                 f"resolve_tenant must be callable, got {type(resolve_tenant).__name__}"
             )
             raise TypeError(msg)
+        if on_missing_tenant not in _VALID_ON_MISSING:
+            msg = (
+                f"on_missing_tenant must be 'allow_unrestricted' or 'raise', "
+                f"got {on_missing_tenant!r}"
+            )
+            raise ValueError(msg)
         self.app = app
         self.resolve_tenant = resolve_tenant
+        self.on_missing_tenant: OnMissingTenant = on_missing_tenant
 
     def __call__(
         self,
@@ -263,6 +298,18 @@ class TenantSessionMiddlewareWSGI:
         where the inner app generates chunks lazily.
         """
         tenant = self.resolve_tenant(environ)
+
+        if tenant is None and self.on_missing_tenant == "raise":
+            raise MissingTenantContextError(
+                operation="TenantSessionMiddlewareWSGI.wsgi",
+                stack_context={
+                    "hint": (
+                        "Middleware configured with on_missing_tenant='raise' "
+                        "but resolve_tenant returned None."
+                    ),
+                    "path": environ.get("PATH_INFO"),
+                },
+            )
 
         with SessionScope(tenant=tenant):
             yield from self.app(environ, start_response)

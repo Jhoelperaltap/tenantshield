@@ -28,6 +28,7 @@ import pytest
 
 from tenantshield import TenantId, try_current_tenant
 from tenantshield.adapters.sqlalchemy import TenantSessionMiddlewareWSGI
+from tenantshield.exceptions import MissingTenantContextError
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -177,3 +178,73 @@ class TestTenantSessionMiddlewareWSGITenantIdAcceptance:
         _collect_response(middleware(_make_environ(), _start_response))
 
         assert captured == ["acme"]
+
+
+class TestTenantSessionMiddlewareWSGIStrictMode:
+    """Verify on_missing_tenant strict enforcement (WSGI). DR-026."""
+
+    def test_default_mode_is_allow_unrestricted(self) -> None:
+        """Default behavior fall-through preserved (DR-022 backwards-compat)."""
+        captured: list[str | None] = []
+
+        def inner_app(_environ: Any, start_response: Any) -> list[bytes]:
+            ctx = try_current_tenant()
+            captured.append(str(ctx.tenant_id) if ctx else None)
+            start_response("200 OK", [])
+            return [b""]
+
+        middleware = TenantSessionMiddlewareWSGI(inner_app, resolve_tenant=lambda _environ: None)
+
+        _collect_response(middleware(_make_environ(), _start_response))
+
+        assert captured == [None]
+
+    def test_strict_mode_raises_on_none_tenant(self) -> None:
+        """on_missing_tenant='raise' triggers MissingTenantContextError."""
+
+        def inner_app(_environ: Any, _sr: Any) -> list[bytes]:
+            return [b""]
+
+        middleware = TenantSessionMiddlewareWSGI(
+            inner_app,
+            resolve_tenant=lambda _environ: None,
+            on_missing_tenant="raise",
+        )
+
+        with pytest.raises(MissingTenantContextError) as exc_info:
+            _collect_response(middleware(_make_environ(), _start_response))
+
+        assert "TenantSessionMiddlewareWSGI" in exc_info.value.operation
+
+    def test_strict_mode_with_valid_tenant_proceeds(self) -> None:
+        """Strict mode + valid tenant: middleware proceeds normally."""
+        captured: list[str | None] = []
+
+        def inner_app(_environ: Any, start_response: Any) -> list[bytes]:
+            ctx = try_current_tenant()
+            captured.append(str(ctx.tenant_id) if ctx else None)
+            start_response("200 OK", [])
+            return [b""]
+
+        middleware = TenantSessionMiddlewareWSGI(
+            inner_app,
+            resolve_tenant=lambda _environ: "acme",
+            on_missing_tenant="raise",
+        )
+
+        _collect_response(middleware(_make_environ(), _start_response))
+
+        assert captured == ["acme"]
+
+    def test_invalid_on_missing_tenant_value_raises(self) -> None:
+        """Construction validates on_missing_tenant value."""
+
+        def fake_app(_environ: Any, _sr: Any) -> list[bytes]:
+            return [b""]
+
+        with pytest.raises(ValueError, match="on_missing_tenant must be"):
+            TenantSessionMiddlewareWSGI(
+                fake_app,
+                resolve_tenant=lambda _environ: None,
+                on_missing_tenant="invalid_value",  # type: ignore[arg-type]
+            )

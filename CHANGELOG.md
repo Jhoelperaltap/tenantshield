@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Decision Records (pending tag)
+
+- **DR-026** -- Middleware-managed strict enforcement for SQLAlchemy
+  adapter. Two-mode behavior when `resolve_tenant` returns `None`:
+  - `on_missing_tenant='allow_unrestricted'` (default): fall-through.
+    No tenant scope bound; SA operations proceed without filtering.
+    Backwards-compatible with SA adapter standalone behavior (DR-022).
+  - `on_missing_tenant='raise'`: middleware raises
+    `MissingTenantContextError` before invoking inner application.
+    Strict mode for adopters requiring guaranteed tenant context on
+    all requests.
+
+  Applies to both `TenantSessionMiddleware` (ASGI) and
+  `TenantSessionMiddlewareWSGI` (WSGI). Materializes the
+  deferred-from-Sub-fase-3A DR-022 strict-behavior promise per
+  Decision 4-C from Phase 3B kickoff.
+
+  Pattern: middleware as opt-in stricter enforcement layer. Adopter
+  mental model: SA adapter standalone = fall-through; middleware-
+  wrapped = configurable enforcement strictness. Cross-adapter
+  naming alignment: parameter name `on_missing_tenant` matches
+  Django adapter `TenantContextMiddleware` (Sub-fase 2B); semantic
+  divergence acknowledged -- Django default is `'raise'` (no
+  standalone path); SA default is `'allow_unrestricted'` (preserves
+  DR-022 standalone fall-through).
+
+  Materialized in Sub-fase 3B Tarea 3B.5 with empirical evidence +
+  8 test cases (4 per middleware class) covering both modes,
+  invalid-value validation, and proceed-on-valid-tenant behavior.
+
 ### Architectural Decision Records (pending tag)
 
 - **ADR-0008** -- Middleware lifecycle design pattern for SQLAlchemy
