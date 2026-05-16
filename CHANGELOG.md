@@ -46,6 +46,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   semantics. Materialized in Sub-fase 3A Tarea 3A.6 with empirical
   evidence + 5 test cases documenting bypass behavior. See ADR-0007
   consequences section.
+- **DR-025** -- SQLAlchemy adapter enforcement fires at flush time,
+  not at `session.add()` / `session.delete()` time. Implications:
+  tenant scope must be active at flush (whether explicit
+  `session.flush()`, autoflush before a query, or implicit flush
+  during `session.commit()`); scope changes between `add()` and
+  `flush()` use the scope active AT FLUSH TIME (auto-injection
+  reflects flush-time scope, not add-time scope); autoflush (default
+  in SA 2.0) triggers events before SELECT queries, so tenant scope
+  must be active for queries with pending writes; expunged instances
+  (`session.expunge()`) do not fire events because the instance is
+  no longer tracked by the session. Adopter guidance: keep tenant
+  scope active throughout session operations, not only during
+  instance construction. Pattern paralelo a Django adapter's signal
+  firing at `model.save()` time; SA adapter's flush-time firing
+  matches SA's session lifecycle. Together with DR-021 (write
+  enforcement) and DR-022 (read enforcement), DR-025 establishes the
+  complete timing semantics of the adapter. Materialized in Sub-fase
+  3A Tarea 3A.9 with empirical evidence + 7 test cases across flush,
+  autoflush, commit, and expunge timing points. See ADR-0007
+  (event-based enforcement) for related architectural context.
 
 ### Architectural Decision Records (pending tag)
 
