@@ -157,8 +157,6 @@ branch = true
 source = ["tenantshield"]
 omit = [
     "src/tenantshield/_version.py",
-    # Sub-fase 3B scaffolding; tests + revert in Tareas 3B.3-3B.4.
-    "src/tenantshield/adapters/sqlalchemy/middleware.py",
 ]
 
 [tool.coverage.report]
