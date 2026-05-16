@@ -1,0 +1,23 @@
+[project]
+name = "tenantshield-example-fastapi"
+version = "0.1.0"
+description = "Runnable FastAPI example demonstrating TenantShield SQLAlchemy adapter."
+requires-python = ">=3.11"
+dependencies = [
+    "tenantshield[sqlalchemy] @ file://${PROJECT_ROOT}/../../..",
+    "fastapi>=0.110,<2.0",
+    "uvicorn>=0.27,<1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9.0",
+    "httpx>=0.27,<1.0",
+]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["app", "models"]
