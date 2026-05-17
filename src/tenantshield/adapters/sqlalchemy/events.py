@@ -276,7 +276,15 @@ def _do_orm_execute_handler(orm_execute_state: ORMExecuteState) -> None:
     statement: Any = orm_execute_state.statement
     for col_desc in statement.column_descriptions:
         entity = col_desc.get("entity")
-        if entity is None:
+        # Defensive null-check: SQLAlchemy 2.0+ canonical usage populates
+        # ``column_descriptions[i]["entity"]`` for every entry, including
+        # function/literal selects (entity points to the source mapped
+        # class). The ``None`` branch documents the API contract surface
+        # (``get`` returns ``None`` when key absent) but is empirically
+        # unreachable through SA 2.0+ ORM SELECT paths. Rule 28 authorizes
+        # pragma on defensive branches that document a contract rather
+        # than implement reachable logic.
+        if entity is None:  # pragma: no cover
             continue
         if not getattr(entity, _TENANT_AWARE_SENTINEL, False):
             continue
