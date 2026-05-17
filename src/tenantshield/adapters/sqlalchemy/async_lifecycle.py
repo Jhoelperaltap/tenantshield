@@ -6,6 +6,9 @@ sync ``Session`` usage:
 
 - ``AsyncSessionScope``: async context manager binding tenant scope
   around ``AsyncSession`` operations.
+- ``bind_async_session_to_tenant``: direct async binding helper for
+  adopters who need explicit tenant binding without resolver
+  semantics.
 
 Used as the core abstraction for ASGI integrations and any async code
 path performing ``AsyncSession`` operations (background async tasks,
@@ -148,6 +151,93 @@ async def AsyncSessionScope(  # noqa: N802 -- async context manager presents as 
     # via str() to accept both bare strings and NewType-tagged values
     # per Rule 53.
     tenant_id = TenantId(str(resolved))
+    ctx = bind_tenant(tenant_id)
+    async with _atenant_scope(ctx):
+        yield
+
+
+@asynccontextmanager
+async def bind_async_session_to_tenant(
+    tenant: TenantId | str | None,
+) -> AsyncGenerator[None, None]:
+    """Explicitly bind a session-scoped tenant for AsyncSession operations.
+
+    Parallel to :func:`bind_session_to_tenant` for sync ``Session``
+    usage. Helper for adopters who need explicit tenant binding from
+    async contexts without the callable-resolver flexibility of
+    ``AsyncSessionScope``. Use cases:
+
+    - Async CLI scripts where tenant is determined from command-line
+      args.
+    - Async background workers processing tenant-specific jobs.
+    - Async test fixtures with hardcoded tenant scopes.
+
+    Composable with ``AsyncSessionScope``: invoking
+    ``bind_async_session_to_tenant`` inside an active
+    ``AsyncSessionScope`` block creates a nested scope (inner tenant
+    overrides outer; outer restored on inner exit). Pattern paralelo
+    Phase 3B Tarea 3B.2 sync precedent.
+
+    Direct usage::
+
+        async with bind_async_session_to_tenant("acme"):
+            async with async_session() as s:
+                await s.execute(select(Invoice))
+
+    Composition with AsyncSessionScope::
+
+        async with AsyncSessionScope(resolve_tenant=from_request):
+            async with bind_async_session_to_tenant("system_admin"):
+                # Override resolved tenant for specific block
+                ...
+
+    Difference from ``AsyncSessionScope``:
+
+    - ``AsyncSessionScope``: callable resolver + fall-through support.
+    - ``bind_async_session_to_tenant``: direct tenant only, no
+      fall-through.
+
+    Both ultimately wrap ``tenantshield.atenant_scope``. Choose based
+    on whether tenant resolution is callable-driven
+    (``AsyncSessionScope``) or determined-up-front
+    (``bind_async_session_to_tenant``).
+
+    Args:
+        tenant: Tenant identifier. Required, non-empty. Can be
+            ``TenantId`` or ``str`` (normalized internally via
+            ``TenantId(str(tenant))``). Type allows ``None`` for
+            adopter ergonomic safety (dynamic code might pass None);
+            None / empty raise ``ValueError`` with helpful guidance
+            toward ``AsyncSessionScope`` for fall-through use cases.
+
+    Yields:
+        None. Tenant scope is bound via ``atenant_scope`` internally;
+        adopters call ``try_current_tenant()`` to inspect.
+
+    Raises:
+        ValueError: If ``tenant`` is ``None`` or evaluates to empty
+            after string conversion. Helpful message points to
+            ``AsyncSessionScope`` as alternative for fall-through use
+            cases.
+
+    See Also:
+        :func:`bind_session_to_tenant` -- synchronous ``Session``
+            equivalent.
+        :func:`AsyncSessionScope` -- more flexible async context
+            manager with resolver callable support and fall-through
+            semantics.
+        ``tenantshield.atenant_scope`` -- Phase 1 async core API.
+    """
+    if tenant is None or not str(tenant):
+        msg = (
+            "bind_async_session_to_tenant requires a non-empty tenant. "
+            "For fall-through behavior (no scope bound), use "
+            "AsyncSessionScope with no arguments or resolve_tenant "
+            "returning None."
+        )
+        raise ValueError(msg)
+
+    tenant_id = TenantId(str(tenant))
     ctx = bind_tenant(tenant_id)
     async with _atenant_scope(ctx):
         yield

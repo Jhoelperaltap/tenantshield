@@ -1,19 +1,25 @@
-"""Unit tests for SQLAlchemy adapter async lifecycle module (AsyncSessionScope).
+"""Unit tests for SQLAlchemy adapter async lifecycle module.
 
-Tests AsyncSessionScope async context manager:
+Tests both async helpers:
+
+- ``AsyncSessionScope``: callable resolver + fall-through semantics.
+- ``bind_async_session_to_tenant``: direct binding, no fall-through.
+
+Topics covered:
 
 - Direct tenant binding (str + TenantId).
-- Callable resolver pattern.
-- Fall-through behavior (None tenant / None resolver).
-- Mutual exclusivity validation.
+- Callable resolver pattern (AsyncSessionScope only).
+- Fall-through behavior (AsyncSessionScope only).
+- Mutual exclusivity validation (AsyncSessionScope only).
 - Exception propagation + scope cleanup.
-- Nested AsyncSessionScope.
+- Nested scopes (LIFO restoration).
+- Composition between AsyncSessionScope and bind_async_session_to_tenant.
 
 Integration with SA ``AsyncSession`` is covered in Tareas 4A.3, 4A.4,
 and 4A.7 (using aiosqlite formally added at Tarea 4A.6); unit tests
 here focus on the ContextVar lifecycle wrapping itself, independent
 of SA infrastructure. Pattern paralelo to ``test_sqlalchemy_lifecycle``
-(Phase 3B precedent for sync ``SessionScope``).
+(Phase 3B precedent for sync ``SessionScope`` + ``bind_session_to_tenant``).
 """
 
 from __future__ import annotations
@@ -21,7 +27,10 @@ from __future__ import annotations
 import pytest
 
 from tenantshield import TenantId, try_current_tenant
-from tenantshield.adapters.sqlalchemy import AsyncSessionScope
+from tenantshield.adapters.sqlalchemy import (
+    AsyncSessionScope,
+    bind_async_session_to_tenant,
+)
 
 
 class TestAsyncSessionScopeDirectBinding:
@@ -159,3 +168,64 @@ class TestAsyncSessionScopeNesting:
             restored = try_current_tenant()
             assert restored is not None
             assert str(restored.tenant_id) == "outer"
+
+
+class TestBindAsyncSessionToTenantDirect:
+    """Verify bind_async_session_to_tenant with direct tenant argument."""
+
+    @pytest.mark.asyncio
+    async def test_str_tenant_binds_correctly(self) -> None:
+        async with bind_async_session_to_tenant("acme"):
+            ctx = try_current_tenant()
+            assert ctx is not None
+            assert str(ctx.tenant_id) == "acme"
+
+    @pytest.mark.asyncio
+    async def test_tenant_id_object_accepted(self) -> None:
+        async with bind_async_session_to_tenant(TenantId("globex")):
+            ctx = try_current_tenant()
+            assert ctx is not None
+            assert str(ctx.tenant_id) == "globex"
+
+    @pytest.mark.asyncio
+    async def test_scope_cleaned_up_after_block(self) -> None:
+        async with bind_async_session_to_tenant("acme"):
+            assert try_current_tenant() is not None
+        assert try_current_tenant() is None
+
+    @pytest.mark.asyncio
+    async def test_none_tenant_raises_value_error(self) -> None:
+        with pytest.raises(ValueError, match="non-empty tenant"):
+            async with bind_async_session_to_tenant(None):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_empty_string_tenant_raises_value_error(self) -> None:
+        with pytest.raises(ValueError, match="non-empty tenant"):
+            async with bind_async_session_to_tenant(""):
+                pass
+
+
+class TestBindAsyncSessionToTenantComposition:
+    """Verify bind_async_session_to_tenant composes with AsyncSessionScope."""
+
+    @pytest.mark.asyncio
+    async def test_nested_inside_async_session_scope_inner_overrides(self) -> None:
+        async with AsyncSessionScope(tenant="outer"):
+            async with bind_async_session_to_tenant("inner"):
+                inner_ctx = try_current_tenant()
+                assert inner_ctx is not None
+                assert str(inner_ctx.tenant_id) == "inner"
+
+            outer_ctx = try_current_tenant()
+            assert outer_ctx is not None
+            assert str(outer_ctx.tenant_id) == "outer"
+
+    @pytest.mark.asyncio
+    async def test_exception_inside_bind_cleans_scope(self) -> None:
+        with pytest.raises(ValueError, match="simulated"):  # noqa: PT012
+            async with bind_async_session_to_tenant("acme"):
+                msg = "simulated"
+                raise ValueError(msg)
+
+        assert try_current_tenant() is None

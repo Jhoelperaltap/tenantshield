@@ -10,6 +10,8 @@ Provides multi-tenant ORM enforcement for SQLAlchemy 2.0+ models via:
   operations (Sub-fase 3B).
 - ``AsyncSessionScope`` async context manager for tenant-bound
   ``AsyncSession`` operations (Sub-fase 4A).
+- ``bind_async_session_to_tenant`` explicit async tenant binding
+  helper (Sub-fase 4A).
 - ``bind_session_to_tenant`` explicit tenant binding helper
   (Sub-fase 3B).
 - ``TenantSessionMiddleware`` ASGI middleware (Sub-fase 3B).
@@ -27,6 +29,8 @@ Public surface
   ``Session`` operations.
 - :func:`AsyncSessionScope` -- async context manager for tenant-bound
   ``AsyncSession`` operations.
+- :func:`bind_async_session_to_tenant` -- explicit async tenant binding
+  helper.
 - :func:`bind_session_to_tenant` -- explicit tenant binding helper.
 - :class:`TenantSessionMiddleware` -- ASGI middleware wrapping
   request handling with tenant scope.
@@ -42,7 +46,10 @@ Exceptions (re-exported from core):
 
 from __future__ import annotations
 
-from tenantshield.adapters.sqlalchemy.async_lifecycle import AsyncSessionScope
+from tenantshield.adapters.sqlalchemy.async_lifecycle import (
+    AsyncSessionScope,
+    bind_async_session_to_tenant,
+)
 from tenantshield.adapters.sqlalchemy.decorator import tenant_aware
 from tenantshield.adapters.sqlalchemy.exceptions import (
     CrossTenantAccessError,
@@ -64,6 +71,7 @@ __all__ = [
     "SessionScope",
     "TenantSessionMiddleware",
     "TenantSessionMiddlewareWSGI",
+    "bind_async_session_to_tenant",
     "bind_session_to_tenant",
     "tenant_aware",
 ]
