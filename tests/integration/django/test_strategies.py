@@ -282,11 +282,11 @@ class TestResolveStrategy:
         assert "tenant_extraction" in str(exc_info.value)
 
     def test_raises_when_jwt_secret_missing(self):
-        # Current implementation does `config["jwt_secret"]` which raises
-        # KeyError when missing. Idiomatic Django would raise
-        # ImproperlyConfigured; this is a UX improvement candidate for a
-        # later sub-phase. Test documents current behavior.
-        with pytest.raises(KeyError) as exc_info:
+        # Per DPRJ-2 resolution (Tarea 0.0 housekeeping): missing
+        # `jwt_secret` raises Django-idiomatic ImproperlyConfigured
+        # instead of bare KeyError. Aligns with all other config
+        # validation paths in resolve_strategy.
+        with pytest.raises(ImproperlyConfigured) as exc_info:
             resolve_strategy({"tenant_extraction": "jwt"})
         assert "jwt_secret" in str(exc_info.value)
 

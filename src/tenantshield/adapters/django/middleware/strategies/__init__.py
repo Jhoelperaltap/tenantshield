@@ -56,8 +56,9 @@ def resolve_strategy(config: Mapping[str, object]) -> TenantExtractionStrategy:
         Instance of a class conforming to TenantExtractionStrategy.
 
     Raises:
-        ImproperlyConfigured: when ``tenant_extraction`` is missing or
-            holds an unknown string value.
+        ImproperlyConfigured: when ``tenant_extraction`` is missing,
+            holds an unknown string value, or required strategy-specific
+            keys (e.g., ``jwt_secret`` for the JWT strategy) are absent.
     """
     extraction = config.get("tenant_extraction")
     if extraction is None:
@@ -74,8 +75,17 @@ def resolve_strategy(config: Mapping[str, object]) -> TenantExtractionStrategy:
             header_name=str(config.get("header_name", "X-Tenant-Id")),
         )
     if extraction == "jwt":
+        try:
+            jwt_secret = config["jwt_secret"]
+        except KeyError as exc:
+            msg = (
+                "TENANTSHIELD['jwt_secret'] is required when "
+                "tenant_extraction='jwt'. Configure a non-empty secret "
+                "(use a 32+ byte random value for HS256)."
+            )
+            raise ImproperlyConfigured(msg) from exc
         return JWTStrategy(
-            secret=str(config["jwt_secret"]),
+            secret=str(jwt_secret),
             claim=str(config.get("jwt_claim", "tenant_id")),
             algorithm=str(config.get("jwt_algorithm", "HS256")),
         )
