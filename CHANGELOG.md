@@ -7,8 +7,169 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(Pending entries for Sub-fase 3C SQLAlchemy examples or subsequent
-work.)
+(Pending entries for Phase 4 work or post-Phase 3 consolidation.)
+
+## [0.3.0-alpha] -- 2026-05-16
+
+### Phase 3 summary
+
+Phase 3 of TenantShield delivers complete SQLAlchemy adapter coverage
+across the ORM lifecycle plus framework integration layer. The release
+closes three sub-phases:
+
+- **Sub-fase 3A (`v0.3.0-alpha.0`)** -- enforcement core with the
+  `@tenant_aware` decorator, mapper event-based write enforcement
+  (`before_insert`/`before_update`/`before_delete`), `do_orm_execute`
+  read filtering with `with_loader_criteria` injection, and
+  documented bypass surface for raw SQL (DR-023), bulk operations
+  (DR-024), and flush timing (DR-025).
+- **Sub-fase 3B (`v0.3.0-alpha.1`)** -- session middleware layer:
+  `SessionScope` context manager + `bind_session_to_tenant` helper
+  (framework-agnostic core) + `TenantSessionMiddleware` (ASGI) +
+  `TenantSessionMiddlewareWSGI` (WSGI) with `yield from` generator
+  pattern (Rule 54) + opt-in strict enforcement via
+  `on_missing_tenant='raise'` (DR-026).
+- **Sub-fase 3C (this release)** -- three runnable examples
+  demonstrating adapter usage across FastAPI (ASGI), Flask (WSGI),
+  and framework-agnostic CLI contexts. Validates Sub-fase 3B
+  mock-based middleware tests against real frameworks
+  (Decision 8-A acceptance gate).
+
+### Acceptance gates (8/8 met)
+
+- 367 library tests passing on canonical Python 3.13 + SA 2.0.49.
+- 16 example tests passing (6 FastAPI + 5 Flask + 5 CLI) isolated
+  from main library suite via `testpaths = ["tests"]`.
+- Library coverage 99.70% global (gate >=95%). All Phase 3
+  productive SA adapter modules at 100% lines + branches except
+  `events.py` (97.62%, pre-existing entity-is-None defensive
+  null-check accepted per 3A.5 Option A).
+- mypy strict + pyright clean + ruff clean + 13/13 pre-commit hooks
+  green.
+- Public surface stable: 25 canonical imports verified working
+  (Core 4 + Django adapter 4 + Strategies 6 + DRF adapter 4 +
+  SA adapter 7).
+- 8 ADRs documenting architectural decisions (0001-0008).
+- 26 Decision Records added across the project (DR-001 through
+  DR-026). Phase 3 added DR-021 through DR-026.
+- All sub-fase tags preserved (`v0.3.0-alpha.0`, `v0.3.0-alpha.1`).
+- 3 runnable examples shipped, schema byte-identical across all
+  three (cross-example consistency rigorous).
+
+### Added (Sub-fase 3C)
+
+- `examples/02_sqlalchemy/` runnable examples directory with shared
+  `README.md` overview documenting sync/async boundary for SA
+  adapter (sync-only in Phase 3; `AsyncSession` deferred to
+  Phase 4+) and Phase 2B strategies non-use rationale (BLOCKER #30
+  resolution: SA middleware accepts callable resolvers only).
+- `examples/02_sqlalchemy/fastapi/` -- FastAPI ASGI integration:
+  - `TenantSessionMiddleware` integration via
+    `app.add_middleware(...)`.
+  - Callable resolver extracting `X-Tenant-ID` from ASGI scope.
+  - Sync route handler (recommended) + async route handler with
+    `starlette.concurrency.run_in_threadpool` (correct async
+    pattern; never call sync `Session()` inside `async def` without
+    threadpool).
+  - Strict mode opt-in via separate `strict_app` instance with
+    `on_missing_tenant='raise'`.
+  - 6 end-to-end tests via FastAPI `TestClient`.
+- `examples/02_sqlalchemy/flask/` -- Flask WSGI integration:
+  - `TenantSessionMiddlewareWSGI` integration via
+    `app.wsgi_app = TenantSessionMiddlewareWSGI(...)`.
+  - Callable resolver extracting `HTTP_X_TENANT_ID` from WSGI
+    environ.
+  - Application factory pattern (`create_app`, `create_strict_app`)
+    for Flask CLI deployment and test fixture isolation.
+  - Strict mode opt-in via separate `create_strict_app()` factory.
+  - 5 end-to-end tests via Flask test client.
+- `examples/02_sqlalchemy/cli/` -- framework-agnostic CLI:
+  - Direct `SessionScope` usage for batch operations.
+  - `bind_session_to_tenant` explicit helper.
+  - Nested composition (outer `SessionScope` + inner
+    `bind_session_to_tenant` override; outer restored on inner
+    exit).
+  - argparse subcommands: `seed`, `report --tenant <name>`, `sweep`,
+    `nested`. Auto-seed-before-non-seed command guarantees data
+    availability for demo invocations.
+  - Idempotent `seed_demo_data()` via raw SQL `DELETE` (cites
+    Rule 51 in adopter-facing code).
+  - 5 end-to-end tests via direct `main()` invocation + `capsys`.
+
+### Architecture milestones reached
+
+- SQLAlchemy 2.0+ adapter ships with complete enforcement
+  semantics: writes auto-inject `tenant_id`, cross-tenant writes
+  reject via mapper events, reads filter by tenant via
+  `do_orm_execute`. Documented bypass surface (raw SQL,
+  bulk operations) makes adopter escape hatches explicit.
+- Framework-agnostic session lifecycle binding via `SessionScope`
+  plus `bind_session_to_tenant`; ASGI + WSGI middleware wrappers
+  preserve scope semantics across framework boundaries (Rules
+  54-55).
+- Cross-adapter parameter naming alignment with Django adapter
+  (`on_missing_tenant` consistent across SA + Django middleware;
+  semantic divergence acknowledged: Django default `'raise'`, SA
+  default `'allow_unrestricted'`, per DR-026 rationale).
+- Three runnable examples validate Sub-fase 3B mock-based
+  middleware tests against real ASGI/WSGI frameworks
+  (Decision 8-A acceptance gate closed by Sub-fase 3C).
+- Phase 2B strategies empirically confirmed Django-bound during
+  Sub-fase 3B; cross-adapter strategy unification formally
+  deferred (BLOCKER #30 Path c resolution; revisit Phase 4+).
+- Empirical methodology refinements transmitted forward via
+  Rules 49-55 (absorbed in post-3A + post-3B consolidations):
+  - **Rule 49**: Pattern P1 version bump policy
+    (`__version__` bumps only at Phase root tag).
+  - **Rule 50**: PEP 561 verification via `py.typed` marker file.
+  - **Rule 51**: bulk write test verification via raw SQL or
+    outside-scope load.
+  - **Rule 52**: `with_loader_criteria` requires static SQL
+    expression, never lambda (cache caveat).
+  - **Rule 53**: `TenantId` NewType normalization via
+    `TenantId(str(value))`.
+  - **Rule 54**: WSGI middleware uses `yield from` for
+    streaming-safe scope.
+  - **Rule 55**: sync `ContextVar` visible across async `await`
+    boundaries via asyncio per-task `copy_context()`.
+
+### Version trajectory
+
+- `__version__` bumped `0.2.0a0` -> `0.3.0a0` at Phase 3 root tag
+  per Rule 49 (Pattern P1). First instance of Phase root version
+  bump in Phase 3; pattern coherent with Phase 2 closure precedent
+  (commit `a5f30b3`).
+- Sub-fase tags (`v0.3.0-alpha.0`, `v0.3.0-alpha.1`) preserved
+  `__version__ = 0.2.0a0` per Rule 49.
+
+### Phase 3 -> Phase 4 transition
+
+Phase 4 scope TBD. Anticipated candidates per Sub-fase 3B kickoff
+Decision 2-A and BLOCKER #30 deferrals:
+
+- `AsyncSession` adapter support (deferred per Decision 2-A in
+  Sub-fase 3B kickoff).
+- Cross-adapter strategy unification (deferred per BLOCKER #30
+  Path c, Sub-fase 3B).
+- Additional ORM adapters or expanded enforcement primitives.
+
+Phase 4 kickoff message will materialize scope decisions on next
+architectural turn.
+
+### See also
+
+- See the `[0.3.0-alpha.0]` section below for full Sub-fase 3A
+  details (enforcement core: decorator + mapper events +
+  `do_orm_execute` + bypass semantics + flush timing).
+- See the `[0.3.0-alpha.1]` section below for full Sub-fase 3B
+  details (session middleware: `SessionScope` +
+  `bind_session_to_tenant` + ASGI + WSGI middleware + strict mode).
+- `docs/adr/0006-sqlalchemy-2-0-only.md` (SA 2.0+ scope rationale).
+- `docs/adr/0007-event-based-enforcement.md` (enforcement
+  architecture).
+- `docs/adr/0008-middleware-lifecycle-design.md` (middleware
+  two-layer design pattern; ContextVar-based binding;
+  callable-only resolver).
 
 ## [0.3.0-alpha.1] -- 2026-05-16
 
