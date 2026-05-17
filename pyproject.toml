@@ -87,7 +87,7 @@ path = "src/tenantshield/_version.py"
 target-version = "py311"
 line-length = 100
 src = ["src", "tests"]
-extend-exclude = ["docs/", "examples/"]
+extend-exclude = ["_scratch_*", "docs/", "examples/"]
 
 [tool.ruff.lint]
 select = [
