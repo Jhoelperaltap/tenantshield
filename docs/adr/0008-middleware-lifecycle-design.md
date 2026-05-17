@@ -7,8 +7,8 @@
 **Superseded by:** None.
 **Related:** Decision 3 (revised post-BLOCKER #30), Decision 5-B
 (ContextVar-based binding), DR-022 (read enforcement fall-through),
-DR-026 (TBD: strict middleware behavior in Tarea 3B.5),
-DR-027 (TBD: middleware-specific decision records, Tareas 3B.3-5).
+DR-026 (middleware-managed strict enforcement, materialized in
+Tarea 3B.5).
 
 ## Context
 
@@ -184,8 +184,8 @@ Sub-fase 3B Tareas 3B.0-re + 3B.1 + 3B.2 empirically validated:
 - Decision 3 revised per BLOCKER #30 (callable-only resolver).
 - Decision 5-B from Phase 3B kickoff (ContextVar-based binding).
 - DR-022 (read enforcement fall-through semantics).
-- DR-026 / DR-027 (TBD: middleware-specific decision records,
-  Tareas 3B.3-5).
+- DR-026 (middleware-managed strict enforcement; materialized in
+  Tarea 3B.5).
 - Phase 2 `TenantContextMiddleware` for cross-adapter reference.
 - TenantShield Phase 1 core API (`bind_tenant`, `tenant_scope`,
   `try_current_tenant`, `TenantId`).
