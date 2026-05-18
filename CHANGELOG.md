@@ -7,7 +7,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(Pending entries for Phase 5 work or post-Phase-4 consolidation.)
+(Pending entries for Sub-fase 5B work and subsequent Phase 5 closure.)
+
+## [0.5.0-alpha.0] -- 2026-05-18
+
+### Sub-fase 5A summary
+
+Sub-fase 5A delivers ``AsyncTenantSessionMiddleware``, completing the
+AsyncSession architectural arc initiated en Phase 4A. ASGI-native async
+middleware con parallel API surface a Phase 4A
+``TenantSessionMiddleware`` (Decision 2-A from Phase 5 kickoff). Phase
+4A ``TenantSessionMiddleware`` retained con dual-mode resolver support
+(Decision 3-C); new async middleware additive sin breaking change.
+
+Architectural rationale:
+
+- Sub-fase 5A inherits Phase 4A foundation comprehensively
+  (``ASGIResolveTenant`` type alias, dual-mode resolver dispatch
+  pattern via ``inspect.iscoroutine``, mock test infrastructure).
+- Single architectural difference vs Phase 4A
+  ``TenantSessionMiddleware``: ``async with AsyncSessionScope(tenant=...)``
+  replaces ``with SessionScope(tenant=...)`` at middleware body.
+- Phase 4A backward compatibility: ``TenantSessionMiddleware`` 17/17
+  existing tests pass unchanged. Existing adopter imports preserved.
+- Adopter mental model: explicit choice between sync middleware
+  (``TenantSessionMiddleware``) and async middleware
+  (``AsyncTenantSessionMiddleware``) paralelo Phase 4A
+  ``SessionScope`` vs ``AsyncSessionScope`` precedent.
+
+### Acceptance gates (Sub-fase 5A, 8/8 met)
+
+- 490 library tests + 16 example tests = 506 total on Python 3.13
+  + SA 2.0.49 + aiosqlite 0.22.1 + fastapi 0.136.1 (16 new tests
+  added en Sub-fase 5A: 10 unit + 6 FastAPI integration).
+- Library coverage 99.60% (improved +0.01 vs post-Phase-4 99.59%).
+- mypy strict + pyright clean + ruff clean + 13/13 pre-commit hooks.
+- Public surface 38 symbols (+``AsyncTenantSessionMiddleware`` vs
+  Phase 4 closure 37).
+- FastAPI integration verified via ``TestClient``: 6/6
+  production-realistic scenarios pass.
+- 0 architectural BLOCKERs Sub-fase 5A; 26 consecutive empirical-first
+  tareas sustained.
+
+### Added
+
+- ``tenantshield.adapters.sqlalchemy.AsyncTenantSessionMiddleware``
+  -- ASGI-native async middleware. Internally wraps inner app con
+  ``async with AsyncSessionScope(tenant=...)``. Accepts same
+  dual-mode resolver as ``TenantSessionMiddleware`` (sync callable
+  returning ``TenantId | str | None`` OR async callable returning
+  ``Awaitable[...]``). Same ``on_missing_tenant`` config modes
+  (``"allow_unrestricted"`` default + ``"raise"`` strict).
+
+### Changed
+
+- ``pyproject.toml`` ``[project.optional-dependencies].dev`` adds
+  ``fastapi>=0.115,<1.0`` + ``httpx>=0.27,<1.0`` (TestClient
+  dependency) for FastAPI integration testing en root suite.
+  **Adopter dependency surface UNCHANGED** (both deps en dev group
+  only; adopters NOT forced to install FastAPI).
+
+### Decision Records anticipated en Sub-fase 5A trajectory
+
+- DR-037 (anticipated) -- AsyncTenantSessionMiddleware parallel API
+  surface (Decision 2-A consummation).
+- DR-038 (anticipated) -- Async lifecycle hooks integration via
+  AsyncSessionScope inheritance.
+
+DRs materialization deferred a Sub-fase 5B closure entry consolidation
+(post-5B work batches DRs por Sub-fase trajectory paralelo Phase 4
+precedent).
+
+### Notes
+
+- Decision 2-A (parallel API surface, Phase 5 kickoff Mass A
+  ratification) consummated. Adopters choose sync OR async middleware
+  by Session flavor.
+- Decision 3-C (retain dual-mode resolver + document async preferred)
+  honored. Phase 4A ``TenantSessionMiddleware`` retains dual-mode
+  resolver; new middleware additive.
+- Sub-fase 5A Risk #3 (FastAPI test patterns) RESOLVED empirically
+  via Tarea 5A.3 (6 FastAPI TestClient integration tests).
+- Sub-fase 5A trajectory compressed 6 -> 4 tareas per Owner
+  ratification (α): Phase 4A foundation comprehensive inheritance
+  rendered Tarea 5A.2 + Tarea 5A.4 redundant. Empirical efficiency
+  honored over original spec anticipation. Pattern paralelo Phase 3A
+  3A.11 SKIP per Rule 49 precedent.
+- Pool 5A datapoints (5) pre-registered en
+  ``_scratch_5a0_findings.md`` (gitignored). Consolidation deferred
+  a Phase 5 closure roadmap v1.13 update paralelo Phase 4
+  consolidation pattern.
+- ``__version__`` remains ``0.4.0a0`` per Rule 49 / Pattern P1 (no
+  ``__version__`` bump at sub-fase tags; bump deferred a Phase 5 root
+  tag ``v0.5.0-alpha``).
+
+### Pending -- Sub-fase 5B + Block C closure
+
+- Sub-fase 5B (9 tareas): production hardening -- observability hooks
+  + dedicated audit logger + adopter integration patterns docs
+  (consolidated adopter migration guide async-native middleware via
+  5B.6).
+- Block C (5 tareas): Phase 5 closure ceremony.
 
 ## [0.4.0-alpha] -- 2026-05-17
 
