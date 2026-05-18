@@ -181,6 +181,12 @@ Sub-fase 3B Tareas 3B.0-re + 3B.1 + 3B.2 empirically validated:
 ## References
 
 - ADR-0007 (event-based enforcement; foundational architecture).
+- ADR-0010 (cross-adapter strategy unification; closes the
+  BLOCKER #30 Path (c) deferral cited in this ADR's Alternative C
+  rejection. Phase 3B's callable-only resolver choice remains the
+  active SA middleware contract; Phase 4B added optional strategy
+  classes via `AsgiRequestAdapter` as an additive surface, not a
+  replacement of the resolver pattern documented here).
 - Decision 3 revised per BLOCKER #30 (callable-only resolver).
 - Decision 5-B from Phase 3B kickoff (ContextVar-based binding).
 - DR-022 (read enforcement fall-through semantics).
