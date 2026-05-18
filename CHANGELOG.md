@@ -7,7 +7,158 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(Pending entries for Phase 4 work or post-Phase 3 consolidation.)
+(Pending entries for Sub-fase 4B work or post-Phase 4 closure.)
+
+## [0.4.0-alpha.0] -- 2026-05-17
+
+### Sub-fase 4A summary
+
+Sub-fase 4A delivers the asynchronous SQLAlchemy adapter surface,
+closing Decision 2-A's deferral from Sub-fase 3B. AsyncSession adopters
+gain parallel lifecycle helpers (`AsyncSessionScope` +
+`bind_async_session_to_tenant`), dual-mode resolver capability in
+`TenantSessionMiddleware` (sync or async resolver, transparent
+dispatch), and an AsyncSession-native FastAPI example replacing the
+Phase 3 sync + `run_in_threadpool` pattern (Decision 7-A).
+
+Architectural payoff of Phase 3A's event-based enforcement choice:
+zero new event handlers were required. SQLAlchemy
+`AsyncSession.sync_session_class = Session` routes async ops through
+the existing Phase 3A handler dispatch, empirically verified
+end-to-end across all enforcement paths (write + read).
+
+### Acceptance gates (8/8 met)
+
+- 412 library tests passing on canonical Python 3.13 + SA 2.0.49 +
+  aiosqlite 0.22.1 (45 new tests added in Sub-fase 4A).
+- 16 example tests passing (5 CLI + 5 Flask + 6 FastAPI async)
+  isolated from main library suite.
+- Library coverage 99.91% (gate >=95%); all productive SA adapter
+  modules at 100% lines + branches (`async_lifecycle.py` 100%,
+  `middleware.py` 100% post-extension, `events.py` 100% via Rule 28
+  pragma per Tarea 0.1).
+- mypy strict + pyright clean + ruff clean + 13/13 pre-commit hooks
+  green.
+- Public surface stable + extended: 27 canonical imports (Core 4 +
+  Django adapter 4 + Strategies 6 + DRF adapter 4 + SA adapter 9
+  (+`AsyncSessionScope` +`bind_async_session_to_tenant`)).
+- 9 ADRs documenting architectural decisions (0001-0009).
+- 31 Decision Records (DR-001 through DR-027 skipped + DR-028..032
+  added in Sub-fase 4A).
+- All sub-fase tags preserved (`v0.3.0-alpha.0`, `v0.3.0-alpha.1`,
+  `v0.4.0-alpha.0`).
+- Phase 3A handler reuse confirmed empirically (write + read paths)
+  with zero new event handler code.
+
+### Added
+
+- `tenantshield.adapters.sqlalchemy.AsyncSessionScope` async context
+  manager. Mirrors `SessionScope` parameter parity (`tenant`,
+  `resolve_tenant`) and fall-through / mutual-exclusivity semantics.
+  Implemented as `@asynccontextmanager`-decorated function wrapping
+  `tenantshield.atenant_scope`. Decision 3-A.
+- `tenantshield.adapters.sqlalchemy.bind_async_session_to_tenant`
+  async explicit tenant binding helper. Mirrors
+  `bind_session_to_tenant` parameter parity (single positional
+  `tenant`, raise on `None` / empty). Composable with
+  `AsyncSessionScope` for nested binding semantics (inner-override,
+  outer-restore-on-exit). Decision 3-A.
+- `TenantSessionMiddleware` (ASGI) dual-mode resolver support.
+  Resolver may return either `TenantId | str | None` (Phase 3B
+  precedent) or `Awaitable[TenantId | str | None]` (Sub-fase 4A
+  extension). Middleware auto-awaits via `inspect.iscoroutine`.
+  Backward compatibility preserved: existing sync resolvers
+  unchanged. Decision 3-A.
+- AsyncSession-native FastAPI example
+  (`examples/02_sqlalchemy/fastapi/`) replacing the Phase 3 sync +
+  `run_in_threadpool` pattern (Decision 7-A). Demonstrates dual-mode
+  resolver in the same example (default `app` sync resolver,
+  `strict_app` async resolver). 6 end-to-end tests via FastAPI
+  `TestClient`.
+- `aiosqlite>=0.22,<1.0` dev dependency (Rule 32 eligible 145 days
+  stable at pin selection). Used for AsyncSession integration tests
+  and the FastAPI async example.
+
+### Changed
+
+- `pytest-cov` pin widened to `<8.0` and functionally upgraded to
+  7.1.0 (Tarea 4.0, Rule 32 + BLOCKER #31 Option β resolution
+  introducing pin-widening operational discipline distinguishing
+  symbolic widening from functional adoption).
+- Scratch artifacts under `_scratch_*` excluded from `ruff` via
+  `[tool.ruff].extend-exclude` (Tarea 4A.1, BLOCKER #32 Option β
+  resolution preserving 4A.0 GO directive to keep empirical
+  exploration scratch files locally).
+
+### Decision Records
+
+- **DR-028** -- Async ContextVar propagation invariants for the SA
+  adapter. Sync `ContextVar` set in async code is visible across
+  `await` boundaries within the same task (asyncio per-task
+  `copy_context()` semantics, Rule 55 reconfirms). Concurrent
+  `asyncio.gather` tasks are isolated; binding in one task does not
+  leak to others. Empirically validated in Tarea 4A.0 Scenarios 1 + 2
+  and reconfirmed via Tarea 4A.5 dual-mode middleware tests.
+- **DR-029** -- AsyncSession mapper event dispatch reuses Phase 3A
+  handlers. `event.listen(cls, "before_insert", ...)` (and update /
+  delete) fires under `await AsyncSession.flush()` because SQLAlchemy
+  dispatches events at the underlying sync engine flush layer; no
+  async-specific listeners required. Empirically validated in Tarea
+  4A.0 Scenario 4 and reconfirmed end-to-end in Tarea 4A.3 (3 write
+  enforcement scenarios + AsyncSessionScope integration + cross-tenant
+  blocking).
+- **DR-030** -- AsyncSession `do_orm_execute` dispatch reuses Phase 3A
+  read filtering. The session-level event registered on `Session`
+  fires for `await AsyncSession.execute(select(...))` because
+  `AsyncSession.sync_session_class = Session`; the same handler
+  injects `with_loader_criteria` filtering transparently. Empirically
+  validated in Tarea 4A.0 Scenario 3 and reconfirmed end-to-end in
+  Tarea 4A.4 (9 read filtering scenarios).
+- **DR-031** -- ASGI `TenantSessionMiddleware` dual-mode resolver
+  support. Resolver returns either synchronous `TenantId | str | None`
+  or asynchronous `Awaitable[TenantId | str | None]`. Middleware
+  invokes resolver, dispatches via `inspect.iscoroutine`, and awaits
+  when needed. Backward compatibility preserved: existing sync
+  resolvers continue working with no signature widening required
+  (the `Callable[..., Any]` type alias already permits dual-mode at
+  the type-system level). WSGI middleware remains sync-only by design.
+  Materialized in Tarea 4A.5.
+- **DR-032** -- Async/sync coexistence in the same process. Single
+  ContextVar binding shared across sync `tenant_scope` and async
+  `atenant_scope` flavors. `asyncio.to_thread` propagates context to
+  worker threads, enabling sync utilities called from async code (and
+  vice versa via `asyncio.run`) to observe the active tenant. Phase 3A
+  enforcement applies regardless of which flavor executes the DB
+  operation. Empirically validated in Tarea 4A.0 Scenario 7 and
+  formalized as integration tests in Tarea 4A.7.
+
+### Architectural Decision Records
+
+- **ADR-0009** -- AsyncSession adapter architecture. Phase 4A
+  introduces parallel async lifecycle helpers + dual-mode resolver
+  middleware leveraging Phase 3A event handler reuse via
+  `AsyncSession.sync_session_class`. Three alternatives rejected with
+  rationale: parallel async-specific event handlers (Phase 3A reuse
+  preferred; dispatch divergence risk avoided), `SessionScope`
+  dual-mode magic (Decision 3-A explicitly chose parallel helpers),
+  async-only resolver-only middleware (backward compatibility
+  preserved). Five empirical pillars documented with cross-references
+  to Tarea 4A.0-4A.7 scenarios + tests. Materialized in Tarea 4A.8
+  (Sub-fase 4A closure).
+
+### Notes
+
+- DR-027 was skipped in Sub-fase 3B per scope refinement; the DR
+  ledger preserves the skipped entry for historical accuracy and
+  continues with DR-028 forward. Ledger immutability is project canon.
+- Phase 3 architectural design choice (event-based enforcement,
+  ADR-0007) pays compound dividends in Phase 4: zero new event
+  handlers needed for AsyncSession adoption. Adopters with existing
+  `@tenant_aware`-decorated models require no code changes to benefit
+  from Phase 4A AsyncSession support.
+- Phase 4A widening backlog status: pytest-cov widened in Tarea 4.0;
+  4 monitor items (django ecosystem + mypy) deferred to Phase 4
+  closure pin audit per Rule 61.
 
 ## [0.3.0-alpha] -- 2026-05-16
 
