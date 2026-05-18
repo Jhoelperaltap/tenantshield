@@ -52,6 +52,15 @@ from tenantshield.registry import (
     is_tenant_aware,
     register_model,
 )
+from tenantshield.strategies import (
+    CallableStrategy,
+    HeaderStrategy,
+    HostStrategy,
+    JWTStrategy,
+    RequestProtocol,
+    TenantExtractionError,
+    TenantExtractionStrategy,
+)
 
 __all__ = [
     "AdapterError",
@@ -61,6 +70,7 @@ __all__ = [
     "AuditEvent",
     "AuditEventType",
     "AuditSink",
+    "CallableStrategy",
     "ChainPolicy",
     "ConfigurationError",
     "CrossTenantAccessError",
@@ -69,7 +79,10 @@ __all__ = [
     "Deny",
     "DenyByDefaultPolicy",
     "EnforcementError",
+    "HeaderStrategy",
+    "HostStrategy",
     "InMemorySink",
+    "JWTStrategy",
     "MissingTenantContextError",
     "ModelRegistry",
     "NullSink",
@@ -77,10 +90,13 @@ __all__ = [
     "OperationType",
     "Policy",
     "RegistryEntry",
+    "RequestProtocol",
     "RequireScope",
     "StructLogSink",
     "TenantContext",
     "TenantContextError",
+    "TenantExtractionError",
+    "TenantExtractionStrategy",
     "TenantId",
     "TenantShieldError",
     "UnscopedQueryError",
