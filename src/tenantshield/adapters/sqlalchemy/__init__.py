@@ -90,6 +90,7 @@ from tenantshield.strategies import (
     RequestProtocol,
     TenantExtractionError,
     TenantExtractionStrategy,
+    resolve_strategy,
 )
 
 __all__ = [
@@ -109,5 +110,6 @@ __all__ = [
     "TenantSessionMiddlewareWSGI",
     "bind_async_session_to_tenant",
     "bind_session_to_tenant",
+    "resolve_strategy",
     "tenant_aware",
 ]

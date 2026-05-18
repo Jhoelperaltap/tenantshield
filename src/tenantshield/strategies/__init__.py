@@ -43,6 +43,7 @@ are preserved by the Sub-fase 4B Tarea 4B.2 shim layer).
 
 from __future__ import annotations
 
+from tenantshield.strategies._resolver import resolve_strategy
 from tenantshield.strategies.base import (
     RequestProtocol,
     TenantExtractionError,
@@ -61,4 +62,5 @@ __all__ = [
     "RequestProtocol",
     "TenantExtractionError",
     "TenantExtractionStrategy",
+    "resolve_strategy",
 ]

@@ -60,6 +60,7 @@ from tenantshield.strategies import (
     RequestProtocol,
     TenantExtractionError,
     TenantExtractionStrategy,
+    resolve_strategy,
 )
 
 __all__ = [
@@ -111,6 +112,7 @@ __all__ = [
     "is_tenant_aware",
     "register_model",
     "register_sink",
+    "resolve_strategy",
     "tenant_scope",
     "try_current_tenant",
     "unregister_sink",

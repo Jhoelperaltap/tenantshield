@@ -28,6 +28,7 @@ from tenantshield.strategies import (
     RequestProtocol,
     TenantExtractionError,
     TenantExtractionStrategy,
+    resolve_strategy,
 )
 
 _TEST_JWT_SECRET = "test-secret-32-bytes-or-longer-for-hs256-key"  # noqa: S105 -- test fixture
@@ -216,3 +217,62 @@ class TestTopLevelReExports:
         assert _ts.RequestProtocol is RequestProtocol
         assert _ts.TenantExtractionStrategy is TenantExtractionStrategy
         assert _ts.TenantExtractionError is TenantExtractionError
+        assert _ts.resolve_strategy is resolve_strategy
+
+
+class TestResolveStrategy:
+    """Verify ``resolve_strategy`` factory dispatches per configuration."""
+
+    def test_resolves_header_with_default_name(self) -> None:
+        strategy = resolve_strategy({"tenant_extraction": "header"})
+        assert isinstance(strategy, HeaderStrategy)
+        assert strategy.header_name == "X-Tenant-Id"
+
+    def test_resolves_header_with_custom_name(self) -> None:
+        strategy = resolve_strategy({"tenant_extraction": "header", "header_name": "X-Org"})
+        assert isinstance(strategy, HeaderStrategy)
+        assert strategy.header_name == "X-Org"
+
+    def test_resolves_host(self) -> None:
+        strategy = resolve_strategy({"tenant_extraction": "host"})
+        assert isinstance(strategy, HostStrategy)
+
+    def test_resolves_jwt_with_required_secret(self) -> None:
+        strategy = resolve_strategy(
+            {"tenant_extraction": "jwt", "jwt_secret": _TEST_JWT_SECRET},
+        )
+        assert isinstance(strategy, JWTStrategy)
+        assert strategy.claim == "tenant_id"
+        assert strategy.algorithm == "HS256"
+
+    def test_resolves_jwt_with_custom_claim_and_algorithm(self) -> None:
+        strategy = resolve_strategy(
+            {
+                "tenant_extraction": "jwt",
+                "jwt_secret": _TEST_JWT_SECRET,
+                "jwt_claim": "org",
+                "jwt_algorithm": "HS512",
+            },
+        )
+        assert isinstance(strategy, JWTStrategy)
+        assert strategy.claim == "org"
+        assert strategy.algorithm == "HS512"
+
+    def test_resolves_callable(self) -> None:
+        def my_fn(_request: RequestProtocol) -> str:
+            return "x"
+
+        strategy = resolve_strategy({"tenant_extraction": my_fn})
+        assert isinstance(strategy, CallableStrategy)
+
+    def test_raises_when_tenant_extraction_missing(self) -> None:
+        with pytest.raises(ValueError, match="tenant_extraction"):
+            resolve_strategy({})
+
+    def test_raises_when_jwt_secret_missing(self) -> None:
+        with pytest.raises(ValueError, match="jwt_secret"):
+            resolve_strategy({"tenant_extraction": "jwt"})
+
+    def test_raises_on_unknown_string_value(self) -> None:
+        with pytest.raises(ValueError, match="Unknown tenant_extraction"):
+            resolve_strategy({"tenant_extraction": "unknown_strategy"})
