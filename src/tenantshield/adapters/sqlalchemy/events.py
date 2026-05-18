@@ -46,6 +46,13 @@ from tenantshield.exceptions import (
     CrossTenantAccessError,
     MissingTenantContextError,
 )
+from tenantshield.observability._emit import emit_event
+from tenantshield.observability.events import (
+    EVENT_READ_FALLTHROUGH,
+    EVENT_READ_FILTERED,
+    EVENT_WRITE_BLOCKED,
+    EVENT_WRITE_INJECTED,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
@@ -100,9 +107,22 @@ def _before_insert_handler(
 
     if not target_tenant:
         setattr(target, _TENANT_ID_COLUMN_NAME, ctx.tenant_id)
+        emit_event(
+            EVENT_WRITE_INJECTED,
+            tenant_id=str(ctx.tenant_id),
+            model_class=mapper.class_.__qualname__,
+            operation="before_insert",
+        )
         return
 
     if str(target_tenant) != str(ctx.tenant_id):
+        emit_event(
+            EVENT_WRITE_BLOCKED,
+            tenant_id=str(ctx.tenant_id),
+            attempted_tenant_id=str(target_tenant),
+            model_class=mapper.class_.__qualname__,
+            operation="before_insert",
+        )
         raise CrossTenantAccessError(
             tenant_id_expected=ctx.tenant_id,
             tenant_id_actual=TenantId(str(target_tenant)),
@@ -156,6 +176,13 @@ def _before_update_handler(
     target_tenant = getattr(target, _TENANT_ID_COLUMN_NAME, None)
 
     if not target_tenant:
+        emit_event(
+            EVENT_WRITE_BLOCKED,
+            tenant_id=str(ctx.tenant_id),
+            attempted_tenant_id=None,
+            model_class=mapper.class_.__qualname__,
+            operation="before_update",
+        )
         raise CrossTenantAccessError(
             tenant_id_expected=ctx.tenant_id,
             tenant_id_actual=None,
@@ -164,6 +191,13 @@ def _before_update_handler(
         )
 
     if str(target_tenant) != str(ctx.tenant_id):
+        emit_event(
+            EVENT_WRITE_BLOCKED,
+            tenant_id=str(ctx.tenant_id),
+            attempted_tenant_id=str(target_tenant),
+            model_class=mapper.class_.__qualname__,
+            operation="before_update",
+        )
         raise CrossTenantAccessError(
             tenant_id_expected=ctx.tenant_id,
             tenant_id_actual=TenantId(str(target_tenant)),
@@ -212,6 +246,13 @@ def _before_delete_handler(
     target_tenant = getattr(target, _TENANT_ID_COLUMN_NAME, None)
 
     if not target_tenant:
+        emit_event(
+            EVENT_WRITE_BLOCKED,
+            tenant_id=str(ctx.tenant_id),
+            attempted_tenant_id=None,
+            model_class=mapper.class_.__qualname__,
+            operation="before_delete",
+        )
         raise CrossTenantAccessError(
             tenant_id_expected=ctx.tenant_id,
             tenant_id_actual=None,
@@ -220,6 +261,13 @@ def _before_delete_handler(
         )
 
     if str(target_tenant) != str(ctx.tenant_id):
+        emit_event(
+            EVENT_WRITE_BLOCKED,
+            tenant_id=str(ctx.tenant_id),
+            attempted_tenant_id=str(target_tenant),
+            model_class=mapper.class_.__qualname__,
+            operation="before_delete",
+        )
         raise CrossTenantAccessError(
             tenant_id_expected=ctx.tenant_id,
             tenant_id_actual=TenantId(str(target_tenant)),
@@ -261,6 +309,10 @@ def _do_orm_execute_handler(orm_execute_state: ORMExecuteState) -> None:
 
     ctx = try_current_tenant()
     if ctx is None:
+        emit_event(
+            EVENT_READ_FALLTHROUGH,
+            operation="do_orm_execute",
+        )
         return
 
     tenant = str(ctx.tenant_id)
@@ -295,6 +347,11 @@ def _do_orm_execute_handler(orm_execute_state: ORMExecuteState) -> None:
                 entity.tenant_id == tenant,
                 include_aliases=True,
             )
+        )
+        emit_event(
+            EVENT_READ_FILTERED,
+            tenant_id=tenant,
+            model_class=entity.__qualname__,
         )
 
 
