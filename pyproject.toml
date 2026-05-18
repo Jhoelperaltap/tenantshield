@@ -71,6 +71,8 @@ dev = [
     "djangorestframework-stubs[compatible-mypy]>=3.16.9,<4.0",
     "pytest-django>=4.12,<5.0",
     "aiosqlite>=0.22,<1.0",
+    "fastapi>=0.115,<1.0",
+    "httpx>=0.27,<1.0",
 ]
 
 [project.urls]
