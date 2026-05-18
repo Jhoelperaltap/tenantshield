@@ -7,9 +7,199 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(Pending entries for Block C Phase 4 closure: examples cross-validation,
-pin audit per Rule 61, ``__version__`` bump to ``0.4.0a0`` per Rule 49,
-and Phase 4 closure summary.)
+(Pending entries for Phase 5 work or post-Phase-4 consolidation.)
+
+## [0.4.0-alpha] -- 2026-05-17
+
+### Phase 4 summary
+
+Phase 4 of TenantShield extends the SQLAlchemy adapter delivered in
+Phase 3 con two architectural extensions, closing both formal
+deferrals carried over from Phase 3:
+
+- **Sub-fase 4A (`v0.4.0-alpha.0`)** -- AsyncSession SQLAlchemy adapter.
+  Decision 2-A deferral closed. Parallel async lifecycle helpers
+  (`AsyncSessionScope` + `bind_async_session_to_tenant`) mirror sync
+  ``SessionScope`` / ``bind_session_to_tenant`` parameter parity.
+  ``TenantSessionMiddleware`` dual-mode resolver (sync or async).
+  Phase 3A event handler reuse confirmed transparent across both
+  sync ``Session`` and async ``AsyncSession`` flavors via SA's
+  ``AsyncSession.sync_session_class`` routing -- **zero new event
+  handlers required**. AsyncSession-native FastAPI example replaces
+  the Phase 3 sync pattern (Decision 7-A).
+- **Sub-fase 4B (`v0.4.0-alpha.1`)** -- Cross-adapter strategy
+  unification. BLOCKER #30 multi-phase deferral (originated Sub-fase
+  2B, deferred Sub-fase 3B Path-c) closed empirically end-to-end. New
+  top-level ``tenantshield.strategies`` module hosts framework-
+  agnostic strategies operating on minimal ``RequestProtocol``
+  abstraction (two methods: ``get_header`` + ``get_host``). Adapter-
+  specific request wrappers (``DjangoRequestAdapter`` +
+  ``AsgiRequestAdapter``) bridge framework-specific request types.
+  Django adapter refactored in-place via subclass shim layer
+  preserving Phase 2B contract -- 117/117 existing Django strategy
+  tests pass unchanged. ``resolve_strategy()`` cross-adapter factory
+  function (re-exported at three paths con identical symbol
+  identity).
+
+### Phase 4 architectural milestones
+
+- **Decision 2-A deferral closed.** AsyncSession native operation
+  available for ASGI / FastAPI / async-first SQLAlchemy 2.0+ adopters.
+- **BLOCKER #30 deferral closed empirically end-to-end.** Same
+  strategy class instance extracts identical tenant via both
+  ``DjangoRequestAdapter`` and ``AsgiRequestAdapter`` (8 integration
+  tests demonstrate via Tarea 4B.5).
+- **Phase 3A event-based enforcement design yields compound
+  architectural dividends.** AsyncSession integration cost dramatically
+  reduced -- zero new event handlers needed; Phase 3A handler
+  registration on ``Session`` dispatches transparently for AsyncSession
+  ops via ``AsyncSession.sync_session_class = Session``.
+- **Best Phase BLOCKER profile en historia del proyecto sustained
+  across two consecutive Sub-fases.** Both Sub-fases 4A + 4B closed
+  con 0 architectural BLOCKERs (15 architectural tareas total). The 2
+  Phase 4 BLOCKERs (#31 hard + #32 soft, both Option β resolved)
+  surfaced en operational tareas (4.0 widening pass + 4A.1 scratch
+  lint) -- NOT architectural commitments.
+
+### Acceptance gates (8/8 met for Phase 4)
+
+- 474 library tests passing on canonical Python 3.13 + SA 2.0.49 +
+  aiosqlite 0.22.1 (107 new tests added across Phase 4: 12 Sub-fase
+  4A AsyncSessionScope + 7 4A.2 bind helper + 7 4A.3 write
+  enforcement + 9 4A.4 read enforcement + 5 4A.5 middleware dual-mode +
+  5 4A.7 async/sync coexistence + 27 4B.1 core strategies + 6 4B.2
+  DjangoRequestAdapter + 12 4B.3 AsgiRequestAdapter + 9 4B.4
+  resolve_strategy + 8 4B.5 cross-adapter integration).
+- 16 example tests passing (5 CLI + 5 Flask + 6 FastAPI async)
+  isolated from main library suite. FastAPI verified empirically
+  post-Phase-4 sin regression (Tarea 4C.0).
+- Library coverage 99.59% (above gate 95%); delta from Phase 3's
+  99.70% reflects Sub-fase 4B Protocol stub bodies + PyJWT ImportError
+  fallback. All productive SA adapter modules at 100%.
+- mypy strict + pyright clean + ruff clean + 13/13 pre-commit hooks
+  green.
+- Public surface 37 canonical symbols (Core 4 + Django adapter 4 +
+  Strategies 6 + DRF adapter 4 + SQLAlchemy adapter 9 + cross-adapter
+  strategies 7 + adapter wrappers 2 + ``resolve_strategy`` 1).
+- 10 ADRs documenting architectural decisions (0001-0010).
+- 35 Decision Records (DR-001 through DR-027 SKIPPED + DR-028..036).
+- All Phase 4 sub-fase tags preserved (``v0.4.0-alpha.0``,
+  ``v0.4.0-alpha.1``) plus Phase 4 root tag ``v0.4.0-alpha`` at this
+  release.
+
+### Added -- Phase 4 cumulative public surface
+
+Sub-fase 4A:
+
+- ``tenantshield.adapters.sqlalchemy.AsyncSessionScope`` -- async
+  context manager binding tenant scope around ``AsyncSession``
+  operations (Decision 3-A parallel-helper).
+- ``tenantshield.adapters.sqlalchemy.bind_async_session_to_tenant``
+  -- explicit async tenant binding helper.
+- ``aiosqlite`` dev dependency for async integration testing.
+
+Sub-fase 4B:
+
+- ``tenantshield.strategies`` cross-adapter core module:
+  ``RequestProtocol``, ``TenantExtractionStrategy``,
+  ``TenantExtractionError``, ``HeaderStrategy``, ``HostStrategy``,
+  ``JWTStrategy``, ``CallableStrategy``, ``resolve_strategy``.
+- ``tenantshield.adapters.django.middleware.strategies.DjangoRequestAdapter``
+  -- bridges Django ``HttpRequest`` to ``RequestProtocol``.
+- ``tenantshield.adapters.sqlalchemy.AsgiRequestAdapter`` -- bridges
+  ASGI scope dict to ``RequestProtocol``.
+- Top-level ``tenantshield`` re-exports for cross-adapter strategies +
+  ``resolve_strategy`` (Phase 1 core pattern).
+
+### Changed -- Phase 4 cumulative
+
+- ``TenantSessionMiddleware`` (ASGI) accepts dual-mode resolvers
+  (sync or async); ``inspect.iscoroutine`` dispatch auto-awaits when
+  needed. Backward compatibility preserved.
+- FastAPI example replaced with AsyncSession-native pattern
+  (``examples/02_sqlalchemy/fastapi/``); Phase 3 sync +
+  ``run_in_threadpool`` pattern superseded (Decision 7-A).
+- Django strategies refactored as subclasses of cross-adapter core
+  (Decision 6-A). Phase 2B adopter imports + raise-on-missing
+  contract preserved exactly.
+- ``SubdomainStrategy`` retained as Django adapter alias of
+  ``HostStrategy`` for Phase 2B backward compatibility.
+- ``pytest-cov`` pin widened to ``<8.0`` and functionally upgraded to
+  7.1.0 (Tarea 4.0 -- BLOCKER #31 Option β resolution introducing
+  pin-widening operational discipline).
+- ``[tool.ruff].extend-exclude`` adds ``_scratch_*`` glob (Tarea
+  4A.1 -- soft-BLOCKER #32 Option β resolution).
+
+### Decision Records added in Phase 4 (DR-028..036)
+
+Sub-fase 4A (DR-028..032):
+
+- **DR-028** -- Async ContextVar propagation invariants for the SA
+  adapter.
+- **DR-029** -- AsyncSession mapper event dispatch reuses Phase 3A
+  handlers.
+- **DR-030** -- AsyncSession ``do_orm_execute`` dispatch reuses
+  Phase 3A read filtering.
+- **DR-031** -- ASGI ``TenantSessionMiddleware`` dual-mode resolver
+  support.
+- **DR-032** -- Async/sync coexistence in the same process.
+
+Sub-fase 4B (DR-033..036):
+
+- **DR-033** -- ``RequestProtocol`` minimal surface (2-method
+  empirical convergence).
+- **DR-034** -- In-place Django strategy refactor preserves public
+  API via subclass shim layer.
+- **DR-035** -- SA strategy class parity scope: Option (gamma)
+  re-exports only.
+- **DR-036** -- ``HostStrategy`` generic host parser replaces
+  Django-specific ``SubdomainStrategy``.
+
+DR-027 preserved as SKIPPED entry per ledger immutability (Sub-fase
+3B scope refinement); DRs materialized monotonically DR-028 through
+DR-036 across Phase 4.
+
+### Architectural Decision Records added in Phase 4
+
+- **ADR-0009** -- AsyncSession adapter architecture (Sub-fase 4A
+  Tarea 4A.8).
+- **ADR-0010** -- Cross-adapter strategy unification (Sub-fase 4B
+  Tarea 4B.6).
+
+ADR-0008 cross-references updated en mismo commit batch que ADR-0010
+materialization per Rule 60 ADR forward-reference cleanup pattern
+(second project application -- first was Tarea 0.2 housekeeping).
+
+### Notes
+
+- ``__version__`` bumped ``0.3.0a0`` -> ``0.4.0a0`` per Rule 49
+  Pattern P1 (4th application en historia del proyecto). Sub-fase
+  tags ``v0.4.0-alpha.0`` and ``v0.4.0-alpha.1`` preserved ``0.3.0a0``;
+  Phase root tag ``v0.4.0-alpha`` applies the bump.
+- Rule 61 pin audit applied at Phase 4 closure (Tarea 4C.1) --
+  audit-only outcome. All 4 monitor items + ecosystem deps had
+  releases within last 14 days (4d-12d aged), so zero items met the
+  Rule 32 14-day stability threshold. Audit produced categorized
+  inventory: 18 Category A (current) + 2 B' (held per ADR-0005 --
+  django, django-stubs) + 4 B-monitor (pending Rule 32 eligibility
+  at Phase 5+ housekeeping window) + 0 widenings + 0 architectural
+  concerns.
+- Two ``TenantExtractionError`` classes coexist: cross-adapter core
+  (``tenantshield.strategies.TenantExtractionError``, kwarg-only)
+  and Django adapter (``tenantshield.adapters.django.exceptions
+  .TenantExtractionError``, positional). Django strategy subclasses
+  translate core errors to the Django-namespaced class via
+  ``from exc`` chaining (Rule 62).
+- Two ``resolve_strategy()`` implementations coexist: cross-adapter
+  core (``ValueError`` for misconfiguration, Python-idiomatic) +
+  Django adapter (``ImproperlyConfigured`` per Phase 2B / DPRJ-2
+  contract). Coexistence is intentional; future consolidation
+  (post-1.0) may merge them with an adapter-side error-translation
+  shim.
+- Phase 5+ housekeeping backlog at Phase 4 closure: Flask + CLI
+  example pytest config fix (paralelo Tarea 4A.6 FastAPI fix; Pool 4
+  datapoint #10) + 4 B-monitor pin items (drf-stubs, mypy 2.x major
+  bump warrants ecosystem testing, django-stubs, django).
 
 ## [0.4.0-alpha.1] -- 2026-05-17
 
