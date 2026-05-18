@@ -16,6 +16,12 @@ Provides multi-tenant ORM enforcement for SQLAlchemy 2.0+ models via:
   (Sub-fase 3B).
 - ``TenantSessionMiddleware`` ASGI middleware (Sub-fase 3B).
 - ``TenantSessionMiddlewareWSGI`` WSGI middleware (Sub-fase 3B).
+- ``AsgiRequestAdapter`` -- ASGI scope wrapper conforming to
+  cross-adapter ``RequestProtocol`` (Sub-fase 4B).
+- Cross-adapter strategy re-exports: ``HeaderStrategy``,
+  ``HostStrategy``, ``JWTStrategy``, ``CallableStrategy``,
+  ``TenantExtractionStrategy``, ``TenantExtractionError``,
+  ``RequestProtocol`` (Sub-fase 4B).
 
 This adapter targets SQLAlchemy 2.0+ only (see ADR-0006 for rationale).
 Adopters running SQLAlchemy 1.4 must upgrade to 2.0 before using
@@ -37,6 +43,18 @@ Public surface
 - :class:`TenantSessionMiddlewareWSGI` -- WSGI middleware wrapping
   request handling with tenant scope; generator-based body
   iteration preserves scope through lazy chunks.
+- :class:`AsgiRequestAdapter` -- wraps ASGI scope dict to conform to
+  the cross-adapter ``RequestProtocol``. Compose with the core
+  strategies to extract tenants from ASGI requests.
+
+Cross-adapter strategy re-exports (from :mod:`tenantshield.strategies`):
+
+- :class:`HeaderStrategy`, :class:`HostStrategy`, :class:`JWTStrategy`,
+  :class:`CallableStrategy` -- concrete strategies operating on
+  ``RequestProtocol``.
+- :class:`TenantExtractionStrategy` -- the strategy Protocol.
+- :class:`TenantExtractionError` -- raised on irrecoverable extraction.
+- :class:`RequestProtocol` -- minimal request abstraction.
 
 Exceptions (re-exported from core):
 
@@ -46,6 +64,7 @@ Exceptions (re-exported from core):
 
 from __future__ import annotations
 
+from tenantshield.adapters.sqlalchemy._request_adapter import AsgiRequestAdapter
 from tenantshield.adapters.sqlalchemy.async_lifecycle import (
     AsyncSessionScope,
     bind_async_session_to_tenant,
@@ -63,12 +82,29 @@ from tenantshield.adapters.sqlalchemy.middleware import (
     TenantSessionMiddleware,
     TenantSessionMiddlewareWSGI,
 )
+from tenantshield.strategies import (
+    CallableStrategy,
+    HeaderStrategy,
+    HostStrategy,
+    JWTStrategy,
+    RequestProtocol,
+    TenantExtractionError,
+    TenantExtractionStrategy,
+)
 
 __all__ = [
+    "AsgiRequestAdapter",
     "AsyncSessionScope",
+    "CallableStrategy",
     "CrossTenantAccessError",
+    "HeaderStrategy",
+    "HostStrategy",
+    "JWTStrategy",
     "MissingTenantContextError",
+    "RequestProtocol",
     "SessionScope",
+    "TenantExtractionError",
+    "TenantExtractionStrategy",
     "TenantSessionMiddleware",
     "TenantSessionMiddlewareWSGI",
     "bind_async_session_to_tenant",
