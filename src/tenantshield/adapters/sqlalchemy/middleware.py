@@ -66,6 +66,11 @@ from typing import TYPE_CHECKING, Any, Literal
 from tenantshield.adapters.sqlalchemy.async_lifecycle import AsyncSessionScope
 from tenantshield.adapters.sqlalchemy.lifecycle import SessionScope
 from tenantshield.exceptions import MissingTenantContextError
+from tenantshield.observability._emit import emit_event
+from tenantshield.observability.events import (
+    EVENT_MIDDLEWARE_REQUEST_BOUND,
+    EVENT_MIDDLEWARE_REQUEST_UNBOUND,
+)
 
 _VALID_ON_MISSING = ("allow_unrestricted", "raise")
 OnMissingTenant = Literal["allow_unrestricted", "raise"]
@@ -244,8 +249,22 @@ class TenantSessionMiddleware:
                 },
             )
 
-        with SessionScope(tenant=tenant):
-            await self.app(scope, receive, send)
+        if tenant is not None:
+            emit_event(
+                EVENT_MIDDLEWARE_REQUEST_BOUND,
+                tenant_id=str(tenant),
+                middleware_class=type(self).__name__,
+            )
+        try:
+            with SessionScope(tenant=tenant):
+                await self.app(scope, receive, send)
+        finally:
+            if tenant is not None:
+                emit_event(
+                    EVENT_MIDDLEWARE_REQUEST_UNBOUND,
+                    tenant_id=str(tenant),
+                    middleware_class=type(self).__name__,
+                )
 
 
 class AsyncTenantSessionMiddleware:
@@ -409,10 +428,24 @@ class AsyncTenantSessionMiddleware:
                 },
             )
 
-        # Phase 5A architectural difference vs Phase 4A
-        # ``TenantSessionMiddleware``: explicit async ctx mgr.
-        async with AsyncSessionScope(tenant=tenant):
-            await self.app(scope, receive, send)
+        if tenant is not None:
+            emit_event(
+                EVENT_MIDDLEWARE_REQUEST_BOUND,
+                tenant_id=str(tenant),
+                middleware_class=type(self).__name__,
+            )
+        try:
+            # Phase 5A architectural difference vs Phase 4A
+            # ``TenantSessionMiddleware``: explicit async ctx mgr.
+            async with AsyncSessionScope(tenant=tenant):
+                await self.app(scope, receive, send)
+        finally:
+            if tenant is not None:
+                emit_event(
+                    EVENT_MIDDLEWARE_REQUEST_UNBOUND,
+                    tenant_id=str(tenant),
+                    middleware_class=type(self).__name__,
+                )
 
 
 class TenantSessionMiddlewareWSGI:
@@ -541,5 +574,19 @@ class TenantSessionMiddlewareWSGI:
                 },
             )
 
-        with SessionScope(tenant=tenant):
-            yield from self.app(environ, start_response)
+        if tenant is not None:
+            emit_event(
+                EVENT_MIDDLEWARE_REQUEST_BOUND,
+                tenant_id=str(tenant),
+                middleware_class=type(self).__name__,
+            )
+        try:
+            with SessionScope(tenant=tenant):
+                yield from self.app(environ, start_response)
+        finally:
+            if tenant is not None:
+                emit_event(
+                    EVENT_MIDDLEWARE_REQUEST_UNBOUND,
+                    tenant_id=str(tenant),
+                    middleware_class=type(self).__name__,
+                )
