@@ -1,7 +1,21 @@
 """SQLAlchemy adapter ASGI/WSGI middleware.
 
-Provides ASGI and WSGI middleware classes that bind tenant context
-to per-request scope using ``lifecycle.SessionScope`` internally.
+Provides three middleware classes binding tenant context per request:
+
+- :class:`TenantSessionMiddleware` -- ASGI middleware using sync
+  ``SessionScope`` internally. Phase 3B canonical implementation;
+  Sub-fase 4A extended con dual-mode resolver (sync OR async
+  callable).
+- :class:`AsyncTenantSessionMiddleware` -- ASGI-native variant using
+  ``async with AsyncSessionScope(...)`` internally. Phase 5A canonical
+  completion of the AsyncSession architectural arc. Architectural
+  difference vs ``TenantSessionMiddleware`` is internal context
+  manager selection; behavioral parity at the ContextVar layer
+  preserves Phase 4A dual-mode resolver coexistence (Decision 3-C).
+  Adopters running async-native deployments prefer this for explicit
+  async ctx mgr signaling.
+- :class:`TenantSessionMiddlewareWSGI` -- WSGI middleware using sync
+  ``SessionScope`` internally con ``yield from`` generator pattern.
 
 Tenant resolution: middleware accepts a ``resolve_tenant`` callable
 parameter. The ASGI variant accepts either synchronous resolvers (the
@@ -49,6 +63,7 @@ from __future__ import annotations
 import inspect
 from typing import TYPE_CHECKING, Any, Literal
 
+from tenantshield.adapters.sqlalchemy.async_lifecycle import AsyncSessionScope
 from tenantshield.adapters.sqlalchemy.lifecycle import SessionScope
 from tenantshield.exceptions import MissingTenantContextError
 
@@ -230,6 +245,173 @@ class TenantSessionMiddleware:
             )
 
         with SessionScope(tenant=tenant):
+            await self.app(scope, receive, send)
+
+
+class AsyncTenantSessionMiddleware:
+    """ASGI-native async middleware binding tenant context per request.
+
+    Phase 5A canonical completion of the AsyncSession architectural arc
+    (Sub-fase 4A). Parallel API surface to :class:`TenantSessionMiddleware`
+    (Decision 2-A from Phase 5 kickoff); architectural difference is
+    internal context manager selection:
+
+    - :class:`TenantSessionMiddleware` (Phase 3B + 4A): wraps inner app
+      con ``with SessionScope(tenant=...)``. ContextVar propagates
+      across ``await`` boundaries (Rule 55; reaffirmed Tarea 5A.0),
+      so sync ctx mgr inside async middleware works correctly.
+    - :class:`AsyncTenantSessionMiddleware` (Phase 5A): wraps inner
+      app con ``async with AsyncSessionScope(tenant=...)``. Explicit
+      async ctx mgr for async-native deployments; same ContextVar
+      mechanism preserves identical observable semantics.
+
+    Decision 3-C (Phase 5 kickoff): both middlewares coexist
+    indefinitely. Adopters choose based on architectural preference:
+
+    - Phase 3B / 4A backward compat: use ``TenantSessionMiddleware``.
+    - Async-native ASGI deployments + explicit async semantics: use
+      ``AsyncTenantSessionMiddleware``.
+
+    Resolver dual-mode (paralelo Sub-fase 4A.5 / Decision 3-A):
+    ``resolve_tenant`` may be a synchronous callable returning
+    ``TenantId | str | None`` OR an asynchronous callable returning
+    an ``Awaitable[TenantId | str | None]``. The middleware invokes
+    the callable, inspects the return value via
+    ``inspect.iscoroutine``, and awaits when needed. Pattern shared
+    con ``TenantSessionMiddleware``.
+
+    Example (synchronous resolver)::
+
+        from tenantshield.adapters.sqlalchemy import (
+            AsyncTenantSessionMiddleware,
+        )
+
+        def resolve_tenant(scope):
+            for name, value in scope.get('headers', []):
+                if name == b'x-tenant-id':
+                    return value.decode('latin-1')
+            return None
+
+        app = AsyncTenantSessionMiddleware(
+            asgi_app,
+            resolve_tenant=resolve_tenant,
+        )
+
+    Example (asynchronous resolver)::
+
+        async def resolve_tenant_async(scope):
+            async with db_pool.connection() as conn:
+                return await conn.fetchval(
+                    "SELECT tenant FROM sessions WHERE token = $1",
+                    extract_token(scope),
+                )
+
+        app = AsyncTenantSessionMiddleware(
+            asgi_app,
+            resolve_tenant=resolve_tenant_async,
+        )
+
+    Lifecycle:
+
+    1. ASGI app invokes middleware ``__call__(scope, receive, send)``.
+    2. Middleware checks ``scope['type']``:
+       - ``'http'``: invokes ``resolve_tenant(scope)`` (awaiting if
+         coroutine) to extract tenant; wraps subsequent
+         ``await self.app(...)`` con ``async with AsyncSessionScope(
+         tenant=...)``.
+       - ``'websocket'`` or ``'lifespan'`` (or other): passes through
+         without tenant binding.
+    3. ``AsyncSessionScope`` exit happens after ``await self.app(...)``
+       returns (success or exception), ensuring ContextVar cleanup.
+
+    Args:
+        app: The inner ASGI application to wrap.
+        resolve_tenant: Callable extracting tenant from ASGI scope
+            dict. Returns ``TenantId``, ``str``, or ``None``, or an
+            awaitable yielding any of these. ``None`` result triggers
+            fall-through (per DR-022 standalone semantics) unless
+            ``on_missing_tenant='raise'``.
+        on_missing_tenant: ``"allow_unrestricted"`` (default,
+            fall-through) or ``"raise"`` (strict mode).
+
+    Raises:
+        TypeError: If ``resolve_tenant`` is not callable.
+        ValueError: If ``on_missing_tenant`` is not a recognized mode.
+
+    See Also:
+        :class:`TenantSessionMiddleware`: synchronous ctx mgr variant
+            (Phase 3B + 4A).
+        :func:`AsyncSessionScope`: async core context manager used
+            internally.
+        ``ADR-0008``: middleware lifecycle design pattern.
+        ``ADR-0011``: async middleware + observability architecture
+            (Sub-fase 5B).
+    """
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        resolve_tenant: ASGIResolveTenant,
+        on_missing_tenant: OnMissingTenant = "allow_unrestricted",
+    ) -> None:
+        if not callable(resolve_tenant):
+            # Defensive runtime guard against type-system violations
+            # (paralelo ``TenantSessionMiddleware`` Phase 4A pattern).
+            msg = (  # type: ignore[unreachable]
+                f"resolve_tenant must be callable, got {type(resolve_tenant).__name__}"
+            )
+            raise TypeError(msg)
+        if on_missing_tenant not in _VALID_ON_MISSING:
+            msg = (
+                f"on_missing_tenant must be 'allow_unrestricted' or 'raise', "
+                f"got {on_missing_tenant!r}"
+            )
+            raise ValueError(msg)
+        self.app = app
+        self.resolve_tenant = resolve_tenant
+        self.on_missing_tenant: OnMissingTenant = on_missing_tenant
+
+    async def __call__(
+        self,
+        scope: ASGIScope,
+        receive: ASGIReceive,
+        send: ASGISend,
+    ) -> None:
+        """ASGI 3.0 entry point -- async-native variant.
+
+        Wraps the inner app with tenant scope binding using
+        ``async with AsyncSessionScope(tenant=...)`` for HTTP requests.
+        Pass-through for websocket / lifespan / other scope types.
+        """
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # Dual-mode resolver dispatch (paralelo Phase 4A.5 / Decision 3-A):
+        # invoke resolver; if it returned a coroutine (async resolver),
+        # await it. Synchronous resolvers return the value directly.
+        result = self.resolve_tenant(scope)
+        tenant = await result if inspect.iscoroutine(result) else result
+
+        if tenant is None and self.on_missing_tenant == "raise":
+            raise MissingTenantContextError(
+                operation="AsyncTenantSessionMiddleware.asgi",
+                stack_context={
+                    "hint": (
+                        "Middleware configured with on_missing_tenant='raise' "
+                        "but resolve_tenant returned None. Either return a "
+                        "valid tenant from resolve_tenant or set "
+                        "on_missing_tenant='allow_unrestricted'."
+                    ),
+                    "scope_type": scope.get("type"),
+                    "scope_path": scope.get("path"),
+                },
+            )
+
+        # Phase 5A architectural difference vs Phase 4A
+        # ``TenantSessionMiddleware``: explicit async ctx mgr.
+        async with AsyncSessionScope(tenant=tenant):
             await self.app(scope, receive, send)
 
 

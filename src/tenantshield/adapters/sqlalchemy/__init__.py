@@ -14,7 +14,12 @@ Provides multi-tenant ORM enforcement for SQLAlchemy 2.0+ models via:
   helper (Sub-fase 4A).
 - ``bind_session_to_tenant`` explicit tenant binding helper
   (Sub-fase 3B).
-- ``TenantSessionMiddleware`` ASGI middleware (Sub-fase 3B).
+- ``TenantSessionMiddleware`` ASGI middleware (Sub-fase 3B + 4A
+  dual-mode resolver).
+- ``AsyncTenantSessionMiddleware`` ASGI-native async middleware
+  (Sub-fase 5A) -- canonical completion using ``async with
+  AsyncSessionScope`` internally; parallel API to
+  ``TenantSessionMiddleware`` per Decision 2-A.
 - ``TenantSessionMiddlewareWSGI`` WSGI middleware (Sub-fase 3B).
 - ``AsgiRequestAdapter`` -- ASGI scope wrapper conforming to
   cross-adapter ``RequestProtocol`` (Sub-fase 4B).
@@ -79,6 +84,7 @@ from tenantshield.adapters.sqlalchemy.lifecycle import (
     bind_session_to_tenant,
 )
 from tenantshield.adapters.sqlalchemy.middleware import (
+    AsyncTenantSessionMiddleware,
     TenantSessionMiddleware,
     TenantSessionMiddlewareWSGI,
 )
@@ -96,6 +102,7 @@ from tenantshield.strategies import (
 __all__ = [
     "AsgiRequestAdapter",
     "AsyncSessionScope",
+    "AsyncTenantSessionMiddleware",
     "CallableStrategy",
     "CrossTenantAccessError",
     "HeaderStrategy",
