@@ -38,7 +38,7 @@ using ``"subdomain"`` continue via the Django adapter's
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from tenantshield.strategies.callable_ import CallableStrategy
 from tenantshield.strategies.header import HeaderStrategy
@@ -46,9 +46,9 @@ from tenantshield.strategies.host import HostStrategy
 from tenantshield.strategies.jwt import JWTStrategy
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
-    from tenantshield.strategies.base import TenantExtractionStrategy
+    from tenantshield.strategies.base import RequestProtocol, TenantExtractionStrategy
 
 
 def resolve_strategy(config: Mapping[str, object]) -> TenantExtractionStrategy:
@@ -109,7 +109,14 @@ def resolve_strategy(config: Mapping[str, object]) -> TenantExtractionStrategy:
         )
 
     if callable(extraction):
-        return CallableStrategy(extraction)
+        # ``callable()`` narrows to a callable shape, but neither mypy nor
+        # pyright can infer the precise signature from a mapping value.
+        # The cast aligns the runtime ``Callable[..., object]`` to the
+        # documented adopter contract ``Callable[[RequestProtocol], str]``;
+        # contract violations surface at extraction time as natural
+        # ``TypeError`` / ``TenantExtractionError`` per the
+        # ``CallableStrategy`` empty/falsy return rule.
+        return CallableStrategy(cast("Callable[[RequestProtocol], str]", extraction))
 
     msg = (
         f"Unknown tenant_extraction value: {extraction!r}. "
