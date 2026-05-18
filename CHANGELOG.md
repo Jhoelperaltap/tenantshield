@@ -7,7 +7,196 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(Pending entries for Sub-fase 4B work or post-Phase 4 closure.)
+(Pending entries for Block C Phase 4 closure: examples cross-validation,
+pin audit per Rule 61, ``__version__`` bump to ``0.4.0a0`` per Rule 49,
+and Phase 4 closure summary.)
+
+## [0.4.0-alpha.1] -- 2026-05-17
+
+### Sub-fase 4B summary
+
+Sub-fase 4B delivers cross-adapter tenant extraction strategy
+unification, closing the BLOCKER #30 deferral originated in Sub-fase
+2B and re-confirmed for Path (c) ratification in Sub-fase 3B.
+
+A new top-level ``tenantshield.strategies`` module hosts framework-
+agnostic strategies (``HeaderStrategy``, ``HostStrategy``,
+``JWTStrategy``, ``CallableStrategy``) operating on a minimal
+``RequestProtocol`` abstraction. Adapter-specific request wrappers
+(``DjangoRequestAdapter`` in the Django adapter, ``AsgiRequestAdapter``
+in the SQLAlchemy adapter) bridge framework-specific request types to
+the protocol. A cross-adapter ``resolve_strategy()`` factory function
+is re-exported at three paths (core / SA adapter / top-level
+``tenantshield``) with identical symbol identity.
+
+Phase 2B Django adopters retain their import paths and Phase 2B
+raise-on-missing contract via subclass shim layer; 117/117 existing
+Django strategy tests pass unchanged.
+
+### Acceptance gates (8/8 met)
+
+- 474 library tests passing on canonical Python 3.13 + SA 2.0.49 +
+  aiosqlite 0.22.1 (62 new tests added in Sub-fase 4B: 27 core
+  strategies + 6 DjangoRequestAdapter + 12 AsgiRequestAdapter + 9
+  resolve_strategy + 8 cross-adapter integration).
+- 16 example tests passing (5 CLI + 5 Flask + 6 FastAPI async)
+  isolated from main library suite.
+- Library coverage 99.59% (gate >=95%); modest delta from Sub-fase
+  4A's 99.91% reflects Protocol stub bodies (``...`` method placeholders
+  in ``tenantshield.strategies.base``) and the PyJWT ImportError fallback
+  in ``tenantshield.strategies.jwt``.
+- mypy strict + pyright clean + ruff clean + 13/13 pre-commit hooks
+  green.
+- Public surface stable + extended: 37 canonical imports (Core 4 +
+  Django adapter 4 + Strategies 6 + DRF adapter 4 + SQLAlchemy adapter
+  9 + cross-adapter strategies 7 + adapter wrappers 2 +
+  ``resolve_strategy`` 1).
+- 10 ADRs documenting architectural decisions (0001-0010).
+- 35 Decision Records (DR-001 through DR-027 SKIPPED + DR-028..036).
+- Sub-fase tag ``v0.4.0-alpha.1`` applied at this release.
+- BLOCKER #30 deferral empirically closed end-to-end via 8 integration
+  tests demonstrating the same strategy class instance extracts
+  identical tenant values via both ``DjangoRequestAdapter`` and
+  ``AsgiRequestAdapter`` (Tarea 4B.5).
+
+### Added
+
+- ``tenantshield.strategies`` cross-adapter core module:
+  - ``RequestProtocol`` -- minimal request interface
+    (``get_header(name)`` + ``get_host()``); ``@runtime_checkable``
+    for adopter test ergonomics.
+  - ``TenantExtractionStrategy`` -- protocol for strategies operating
+    on ``RequestProtocol``.
+  - ``TenantExtractionError`` -- cross-adapter extraction failure
+    exception (kwarg-only constructor; distinct from Django adapter's
+    Phase 2B class).
+  - ``HeaderStrategy``, ``HostStrategy``, ``JWTStrategy``,
+    ``CallableStrategy`` -- four framework-agnostic strategies
+    returning ``TenantId`` on success, ``None`` on fall-through, and
+    raising ``TenantExtractionError`` on irrecoverable failure.
+  - ``resolve_strategy(config)`` -- cross-adapter factory raising
+    ``ValueError`` for misconfiguration (Python-idiomatic; distinct
+    from Django adapter factory which raises
+    ``ImproperlyConfigured`` per Phase 2B / DPRJ-2 preservation).
+- ``tenantshield.adapters.django.middleware.strategies.DjangoRequestAdapter``
+  -- wraps Django ``HttpRequest`` to conform to ``RequestProtocol``.
+  Bridges WSGI ``META`` dict access + ``get_host()`` method to the
+  protocol surface (Decision iii-A).
+- ``tenantshield.adapters.sqlalchemy.AsgiRequestAdapter`` -- wraps
+  ASGI scope dict to conform to ``RequestProtocol``. Bridges header
+  list-of-byte-tuples to case-insensitive string lookup; derives host
+  from the ``Host`` header (Decision iii-A).
+- Top-level ``tenantshield`` re-exports cross-adapter strategies +
+  ``resolve_strategy`` per Phase 1 core re-export pattern (top-level
+  symbol identity matches adapter-level re-exports).
+
+### Changed
+
+- Django strategies (``HeaderStrategy``, ``JWTStrategy``,
+  ``SubdomainStrategy``, ``CallableStrategy``) refactored in-place as
+  subclasses of ``tenantshield.strategies`` core. Each subclass
+  overrides ``extract`` to wrap ``HttpRequest`` in
+  ``DjangoRequestAdapter`` and translate the core return-``None``
+  contract back to Phase 2B raise-``TenantExtractionError`` for
+  backward compatibility (Decision 6-A). Adopter imports + behavior
+  preserved exactly; 117/117 existing Django strategy tests pass
+  unchanged.
+- ``SubdomainStrategy`` retained as a subclass alias of
+  ``HostStrategy``; cross-adapter use prefers ``HostStrategy``
+  (Decision 5-B).
+- ``CallableStrategy`` (Django adapter): adopter callable continues
+  to receive the raw ``HttpRequest`` (preserving Phase 2B contract
+  where callables use ``request.GET``, ``request.session``, etc.).
+  The cross-adapter core ``CallableStrategy``, in contrast, passes
+  the ``RequestProtocol``-conforming object to the callable.
+
+### Decision Records
+
+- **DR-033** -- ``RequestProtocol`` minimal surface. Empirically
+  determined in Tarea 4B.0 to require only two methods
+  (``get_header(name)``, ``get_host()``) to cover all four built-in
+  strategies. Cross-adapter feasibility validated by
+  ``DjangoRequestAdapter`` + ``AsgiRequestAdapter`` both conforming
+  via ``isinstance(adapter, RequestProtocol)`` at the
+  ``@runtime_checkable`` Protocol level. Optional surface additions
+  (query params, cookies, body) deferred until adopter demand.
+- **DR-034** -- In-place Django strategy refactor preserves public
+  API via subclass shim layer (Decision 6-A). Phase 2B adopter
+  imports + raise-on-missing contract preserved; 117/117 Django
+  strategy tests pass unchanged. Subclass approach surgical: each
+  Django strategy subclasses the core strategy, overrides
+  ``extract(request: HttpRequest) -> TenantId`` to wrap the request
+  in ``DjangoRequestAdapter``, delegate to ``super().extract()``, and
+  translate the core's two-tier contract (return ``None`` on missing)
+  back to the Phase 2B single-tier contract (raise
+  ``TenantExtractionError``).
+- **DR-035** -- SA strategy class parity scope: Option (gamma)
+  ratified empirically -- the SA adapter does not require subclass
+  strategies because Phase 3B used callable-resolver only (no
+  legacy Phase 3B strategy classes to preserve). The SA adapter
+  re-exports the core strategies + provides ``AsgiRequestAdapter``.
+  Symmetric to Django's adapter-level wrapper pattern (Decision
+  iii-A) without subclass overhead.
+- **DR-036** -- ``HostStrategy`` generic host parser replaces Django-
+  specific ``SubdomainStrategy`` for cross-adapter use (Decision
+  5-B). Parsing logic (port strip, leftmost-label extraction,
+  three-label minimum for subdomain extraction) is HTTP-standard
+  and not Django-specific; transferable as-is via ``RequestProtocol
+  .get_host()``. Django adopters keep the ``SubdomainStrategy``
+  symbol as a subclass alias of ``HostStrategy`` for Phase 2B
+  backward compatibility (Decision 6-A).
+
+### Architectural Decision Records
+
+- **ADR-0010** -- Cross-adapter strategy unification. Documents the
+  seven architectural pillars: ``RequestProtocol`` minimal surface
+  (Decision 4-A + DR-033), adapter wrappers at adapter level
+  (Decision iii-A), ``HostStrategy`` generic replacement (Decision
+  5-B + DR-036), in-place Django refactor with re-export shim
+  (Decision 6-A + DR-034), adopter-facing callable surfaces preserve
+  framework-native types, cross-adapter ``resolve_strategy()``
+  factory, and ``TenantExtractionError`` in
+  ``tenantshield.strategies`` (Decision ii-B). Three alternatives
+  rejected with rationale (async-specific hierarchy / adapter-only
+  strategies / strategies on raw framework request with runtime
+  dispatch). Cross-adapter pattern alignment table comparing Django
+  adapter and SA adapter symmetries documented. Empirical evidence
+  cross-referenced across Tareas 4B.0 through 4B.5. Materialized in
+  Tarea 4B.6.
+
+### Notes
+
+- DR-027 remains SKIPPED en the ledger per the Sub-fase 3B scope
+  refinement; DR materialization continues monotonically from DR-028
+  (Sub-fase 4A) through DR-036 (Sub-fase 4B). Ledger immutability is
+  project canon.
+- Phase 3A event-based enforcement reuse continues -- zero new event
+  handlers introduced en Sub-fase 4B (the cross-adapter strategy
+  layer is orthogonal to the SA event handler dispatch model).
+- BLOCKER #30 (Phase 2B Django-bound strategies) deferral closed
+  empirically end-to-end in Tarea 4B.5: 8 integration tests
+  demonstrate the same strategy class instance + ``resolve_strategy``
+  output extract identical tenants via both ``DjangoRequestAdapter``
+  and ``AsgiRequestAdapter``.
+- Django adapter retains its separate ``resolve_strategy()`` raising
+  ``ImproperlyConfigured`` per the Phase 2B / DPRJ-2 contract; cross-
+  adapter consumers use the core factory raising ``ValueError``.
+  Coexistence is intentional; future consolidation (post-1.0) may
+  merge them via an adapter-side error-translation shim.
+- Two ``TenantExtractionError`` classes coexist: the cross-adapter
+  core (``tenantshield.strategies.TenantExtractionError``,
+  kwarg-only) and the Django adapter
+  (``tenantshield.adapters.django.exceptions.TenantExtractionError``,
+  positional). Django strategy subclasses translate core errors to
+  the Django-namespaced class via ``from exc`` chaining (Rule 62).
+- Rule 60 applied a second time in project history: ADR-0008 cross-
+  references updated en mismo commit batch que ADR-0010
+  materialization (Tarea 4B.6). First application was Tarea 0.2
+  housekeeping (ADR-0008 DR-026 framing correction + DR-027 orphan
+  cleanup).
+- Phase 4 widening backlog status unchanged: ``pytest-cov`` widened
+  in Tarea 4.0; 4 monitor items (django ecosystem + mypy) deferred
+  to Phase 4 closure pin audit per Rule 61.
 
 ## [0.4.0-alpha.0] -- 2026-05-17
 
