@@ -29,6 +29,12 @@ from typing import TYPE_CHECKING
 
 from tenantshield import TenantId, bind_tenant
 from tenantshield import tenant_scope as _tenant_scope
+from tenantshield.observability._emit import emit_event
+from tenantshield.observability.events import (
+    EVENT_SCOPE_ENTERED,
+    EVENT_SCOPE_EXCEPTION,
+    EVENT_SCOPE_EXITED,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
@@ -128,7 +134,27 @@ def SessionScope(  # noqa: N802 -- context manager presents as class-like to ado
     tenant_id = TenantId(str(resolved))
     ctx = bind_tenant(tenant_id)
     with _tenant_scope(ctx):
-        yield
+        emit_event(
+            EVENT_SCOPE_ENTERED,
+            tenant_id=str(tenant_id),
+            scope_class="SessionScope",
+        )
+        try:
+            yield
+        except Exception as exc:
+            emit_event(
+                EVENT_SCOPE_EXCEPTION,
+                tenant_id=str(tenant_id),
+                scope_class="SessionScope",
+                exception_type=type(exc).__name__,
+            )
+            raise
+        else:
+            emit_event(
+                EVENT_SCOPE_EXITED,
+                tenant_id=str(tenant_id),
+                scope_class="SessionScope",
+            )
 
 
 @contextmanager
