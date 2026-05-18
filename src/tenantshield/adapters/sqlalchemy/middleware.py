@@ -4,7 +4,13 @@ Provides ASGI and WSGI middleware classes that bind tenant context
 to per-request scope using ``lifecycle.SessionScope`` internally.
 
 Tenant resolution: middleware accepts a ``resolve_tenant`` callable
-parameter. Example::
+parameter. The ASGI variant accepts either synchronous resolvers (the
+Phase 3B precedent) or asynchronous resolvers returning an awaitable
+(Sub-fase 4A extension per Decision 3-A). The middleware auto-detects
+the return type via ``inspect.iscoroutine`` and awaits when needed.
+The WSGI variant remains synchronous-only (WSGI is inherently sync).
+
+Example (synchronous resolver -- Phase 3B precedent)::
 
     from tenantshield.adapters.sqlalchemy import TenantSessionMiddleware
 
@@ -15,6 +21,15 @@ parameter. Example::
         return None
 
     asgi_app = TenantSessionMiddleware(app, resolve_tenant=from_asgi_scope)
+
+Example (asynchronous resolver -- Sub-fase 4A extension)::
+
+    async def from_asgi_scope_async(scope):
+        # Fetch tenant from an async source (DB, cache, external API).
+        async with some_async_client() as client:
+            return await client.lookup_tenant(scope)
+
+    asgi_app = TenantSessionMiddleware(app, resolve_tenant=from_asgi_scope_async)
 
 NO Phase 2B strategy reuse: Phase 2B ``TenantExtractionStrategy``
 classes are Django-bound (use ``request.META``, ``request.get_host()``).
@@ -31,6 +46,7 @@ See ADR-0008 (middleware lifecycle design pattern).
 
 from __future__ import annotations
 
+import inspect
 from typing import TYPE_CHECKING, Any, Literal
 
 from tenantshield.adapters.sqlalchemy.lifecycle import SessionScope
@@ -64,9 +80,20 @@ class TenantSessionMiddleware:
     Context propagation across ``await`` boundaries is guaranteed by
     asyncio's per-task ``copy_context()`` semantics; sync
     ``SessionScope`` works correctly inside async middleware.
-    Empirically validated in Tarea 3B.3.
+    Empirically validated in Tarea 3B.3 (sync resolver path) and
+    Tarea 4A.0 Scenarios 1+2 (async resolver context propagation +
+    cross-task isolation).
 
-    Example::
+    Resolver dual-mode (Sub-fase 4A, Decision 3-A): ``resolve_tenant``
+    may be either a synchronous callable returning ``TenantId | str |
+    None`` (Phase 3B precedent) or an asynchronous callable returning
+    an ``Awaitable[TenantId | str | None]``. The middleware invokes
+    the callable, inspects the return value via
+    ``inspect.iscoroutine``, and awaits when needed. Backward
+    compatibility: existing synchronous resolvers continue to work
+    unchanged.
+
+    Example (synchronous resolver)::
 
         from tenantshield.adapters.sqlalchemy import TenantSessionMiddleware
 
@@ -81,13 +108,28 @@ class TenantSessionMiddleware:
             resolve_tenant=resolve_tenant,
         )
 
+    Example (asynchronous resolver)::
+
+        async def resolve_tenant_async(scope):
+            # Fetch tenant from an async source.
+            async with db_pool.connection() as conn:
+                return await conn.fetchval(
+                    "SELECT tenant FROM sessions WHERE token = $1",
+                    extract_token(scope),
+                )
+
+        app = TenantSessionMiddleware(
+            asgi_app,
+            resolve_tenant=resolve_tenant_async,
+        )
+
     Lifecycle:
 
     1. ASGI app invokes middleware ``__call__(scope, receive, send)``.
     2. Middleware checks ``scope['type']``:
-       - ``'http'``: invokes ``resolve_tenant(scope)`` to extract
-         tenant; wraps subsequent ``await self.app(...)`` with
-         ``SessionScope(tenant=...)``.
+       - ``'http'``: invokes ``resolve_tenant(scope)`` (awaiting if
+         coroutine) to extract tenant; wraps subsequent
+         ``await self.app(...)`` with ``SessionScope(tenant=...)``.
        - ``'websocket'`` or ``'lifespan'`` (or other): passes through
          without tenant binding. These contexts have no tenant
          semantics in this version.
@@ -107,10 +149,11 @@ class TenantSessionMiddleware:
     Args:
         app: The inner ASGI application to wrap.
         resolve_tenant: Callable that extracts tenant from ASGI scope
-            dict. Returns ``TenantId``, ``str``, or ``None``. If
-            ``None``, request proceeds without tenant scope binding
-            (fall-through, per DR-022 standalone semantics; stricter
-            behavior in Tarea 3B.5).
+            dict. Returns ``TenantId``, ``str``, or ``None``, or an
+            awaitable yielding any of these (Sub-fase 4A). If the
+            resolution result is ``None``, request proceeds without
+            tenant scope binding (fall-through, per DR-022 standalone
+            semantics; stricter behavior in Tarea 3B.5).
 
     Raises:
         TypeError: If ``resolve_tenant`` is not callable.
@@ -164,7 +207,12 @@ class TenantSessionMiddleware:
             await self.app(scope, receive, send)
             return
 
-        tenant = self.resolve_tenant(scope)
+        # Dual-mode resolver dispatch (Sub-fase 4A, Decision 3-A):
+        # invoke resolver; if it returned a coroutine (async resolver),
+        # await it. Synchronous resolvers (Phase 3B precedent) return
+        # the value directly and skip the await.
+        result = self.resolve_tenant(scope)
+        tenant = await result if inspect.iscoroutine(result) else result
 
         if tenant is None and self.on_missing_tenant == "raise":
             raise MissingTenantContextError(

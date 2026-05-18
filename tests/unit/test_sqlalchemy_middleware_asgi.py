@@ -310,3 +310,117 @@ class TestTenantSessionMiddlewareStrictMode:
                 resolve_tenant=lambda _scope: None,
                 on_missing_tenant="invalid_value",  # type: ignore[arg-type]
             )
+
+
+class TestTenantSessionMiddlewareAsyncResolver:
+    """Verify dual-mode resolver: async resolver returning awaitable is awaited.
+
+    Sub-fase 4A extension per Decision 3-A: ``TenantSessionMiddleware``
+    accepts both synchronous resolvers (Phase 3B precedent) and
+    asynchronous resolvers returning ``Awaitable``. The middleware
+    detects via ``inspect.iscoroutine`` and awaits when needed.
+    """
+
+    def test_http_with_async_resolver_returning_tenant_binds_scope(self) -> None:
+        captured_tenant: list[str | None] = []
+
+        async def inner_app(_scope: Any, _receive: Any, _send: Any) -> None:
+            ctx = try_current_tenant()
+            captured_tenant.append(str(ctx.tenant_id) if ctx else None)
+
+        async def async_resolver(scope: dict[str, Any]) -> str | None:
+            for name, value in scope.get("headers", []):
+                if name == b"x-tenant-id":
+                    return value.decode("latin-1")
+            return None
+
+        middleware = TenantSessionMiddleware(inner_app, resolve_tenant=async_resolver)
+        scope = _make_http_scope(headers=[(b"x-tenant-id", b"acme")])
+
+        async def run() -> None:
+            _, send = _make_send()
+            await middleware(scope, _noop_receive, send)
+
+        asyncio.run(run())
+
+        assert captured_tenant == ["acme"]
+
+    def test_http_with_async_resolver_returning_none_falls_through(self) -> None:
+        captured_tenant: list[str | None] = []
+
+        async def inner_app(_scope: Any, _receive: Any, _send: Any) -> None:
+            ctx = try_current_tenant()
+            captured_tenant.append(str(ctx.tenant_id) if ctx else None)
+
+        async def async_resolver(_scope: dict[str, Any]) -> str | None:
+            return None
+
+        middleware = TenantSessionMiddleware(inner_app, resolve_tenant=async_resolver)
+
+        async def run() -> None:
+            _, send = _make_send()
+            await middleware(_make_http_scope(), _noop_receive, send)
+
+        asyncio.run(run())
+
+        assert captured_tenant == [None]
+
+    def test_http_with_async_resolver_raising_propagates(self) -> None:
+        async def inner_app(_scope: Any, _receive: Any, _send: Any) -> None:
+            pass
+
+        async def async_resolver(_scope: dict[str, Any]) -> str | None:
+            msg = "async resolver failure"
+            raise RuntimeError(msg)
+
+        middleware = TenantSessionMiddleware(inner_app, resolve_tenant=async_resolver)
+
+        async def run() -> None:
+            _, send = _make_send()
+            await middleware(_make_http_scope(), _noop_receive, send)
+
+        with pytest.raises(RuntimeError, match="async resolver failure"):
+            asyncio.run(run())
+
+    def test_async_resolver_on_missing_tenant_raise_mode(self) -> None:
+        """on_missing_tenant='raise' applies after async resolver returns None."""
+
+        async def inner_app(_scope: Any, _receive: Any, _send: Any) -> None:
+            pass
+
+        async def async_resolver(_scope: dict[str, Any]) -> str | None:
+            return None
+
+        middleware = TenantSessionMiddleware(
+            inner_app,
+            resolve_tenant=async_resolver,
+            on_missing_tenant="raise",
+        )
+
+        async def run() -> None:
+            _, send = _make_send()
+            await middleware(_make_http_scope(), _noop_receive, send)
+
+        with pytest.raises(MissingTenantContextError):
+            asyncio.run(run())
+
+    def test_sync_resolver_unchanged_after_dual_mode_extension(self) -> None:
+        """Backward compat: existing synchronous resolver patterns continue working."""
+        captured_tenant: list[str | None] = []
+
+        async def inner_app(_scope: Any, _receive: Any, _send: Any) -> None:
+            ctx = try_current_tenant()
+            captured_tenant.append(str(ctx.tenant_id) if ctx else None)
+
+        def sync_resolver(_scope: dict[str, Any]) -> str:
+            return "globex"
+
+        middleware = TenantSessionMiddleware(inner_app, resolve_tenant=sync_resolver)
+
+        async def run() -> None:
+            _, send = _make_send()
+            await middleware(_make_http_scope(), _noop_receive, send)
+
+        asyncio.run(run())
+
+        assert captured_tenant == ["globex"]
