@@ -1,28 +1,45 @@
-"""JWTStrategy -- decode tenant id from a JWT Bearer token.
+"""JWTStrategy -- Django adapter shim over ``tenantshield.strategies.JWTStrategy``.
 
-This strategy requires PyJWT (optional extra [jwt] in pyproject.toml).
-The import happens at construction time (fail-fast) so users without
-the optional dependency installed get an actionable ImportError when
-they try to instantiate the strategy, rather than a confusing failure
-on the first request.
+Phase 4B Decision 6-A: refactor in-place, preserve Phase 2B contract.
+The Django strategy subclasses the cross-adapter core JWTStrategy,
+internally wraps ``HttpRequest`` in ``DjangoRequestAdapter``, and
+translates:
+
+- Core returns ``None`` when Authorization header missing or not Bearer
+  -> Django shim raises ``TenantExtractionError`` (Phase 2B contract).
+- Core raises ``tenantshield.strategies.TenantExtractionError`` on
+  decode failure or missing claim -> Django shim re-raises the
+  Django-namespaced ``TenantExtractionError`` (with ``from exc``
+  preserving the cause chain).
+
+Requires PyJWT (optional ``[jwt]`` extra). The import is performed by
+the core class at construction time; the Django subclass surfaces the
+same ``ImportError`` semantics.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tenantshield import TenantId
 from tenantshield.adapters.django.exceptions import TenantExtractionError
+from tenantshield.adapters.django.middleware.strategies._request_adapter import (
+    DjangoRequestAdapter,
+)
+from tenantshield.strategies import JWTStrategy as _CoreJWTStrategy
+from tenantshield.strategies import TenantExtractionError as _CoreTenantExtractionError
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
+    from tenantshield._types import TenantId
 
-_BEARER_PREFIX = "Bearer "
 
+class JWTStrategy(_CoreJWTStrategy):
+    """Extract tenant from a JWT in the Authorization header (Phase 2B contract).
 
-class JWTStrategy:
-    """Extract tenant from a JWT in the Authorization header.
+    Subclass of :class:`tenantshield.strategies.JWTStrategy` preserving
+    the Phase 2B Django contract: all failure modes raise
+    ``TenantExtractionError`` from ``tenantshield.adapters.django.exceptions``.
 
     Example:
         strategy = JWTStrategy(secret="my-secret", claim="tenant_id")
@@ -39,69 +56,49 @@ class JWTStrategy:
         claim: str = "tenant_id",
         algorithm: str = "HS256",
     ) -> None:
-        """Initialize with JWT decode parameters.
+        """Initialize with JWT decode parameters (Phase 2B positional signature).
 
         Args:
             secret: Secret key for JWT signature verification.
             claim: Name of the JWT claim carrying the tenant id.
-                Defaults to ``tenant_id``.
-            algorithm: JWT signing algorithm. Defaults to ``HS256``.
+            algorithm: JWT signing algorithm.
 
         Raises:
             ImportError: when PyJWT is not installed. Install via the
                 optional extra: ``pip install 'tenantshield[jwt]'``.
         """
-        try:
-            import jwt  # noqa: PLC0415 -- optional dep, fail-fast at construction
-        except ImportError as exc:
-            msg = (
-                "JWTStrategy requires PyJWT. Install the optional [jwt] "
-                "extra: pip install 'tenantshield[jwt]'."
-            )
-            raise ImportError(msg) from exc
+        super().__init__(secret=secret, claim=claim, algorithm=algorithm)
 
-        # _jwt holds the dynamically imported module; django-stubs cannot
-        # follow this for typing, so member access is annotated as needed.
-        self._jwt = jwt
-        self.secret = secret
-        self.claim = claim
-        self.algorithm = algorithm
-
-    def extract(self, request: HttpRequest) -> TenantId:
+    def extract(self, request: HttpRequest) -> TenantId:  # type: ignore[override]
         """Decode the Bearer token and return the claim as TenantId.
+
+        Type narrowing vs core is intentional per Phase 2B contract
+        preservation (all failure modes raise; core returns ``None`` on
+        missing Authorization header).
 
         Raises:
             TenantExtractionError: when the Authorization header is
-                missing, not in Bearer format, decoding fails (invalid
-                signature, expired, malformed), or the target claim is
-                missing/empty.
+                missing, not in Bearer format, decoding fails, or the
+                target claim is missing/empty (Phase 2B contract).
         """
-        auth = request.META.get("HTTP_AUTHORIZATION", "")
-        if not auth.startswith(_BEARER_PREFIX):
+        adapter = DjangoRequestAdapter(request)
+        try:
+            result = super().extract(adapter)
+        except _CoreTenantExtractionError as exc:
+            # Translate core extraction error to the Django adapter
+            # namespaced error for Phase 2B contract preservation.
+            raise TenantExtractionError(
+                strategy_name=type(self).__name__,
+                reason=exc.reason,
+                context=exc.context,
+            ) from exc
+
+        if result is None:
+            # Core returned None: Authorization header missing or not Bearer.
+            # Phase 2B contract requires raising.
             raise TenantExtractionError(
                 strategy_name=type(self).__name__,
                 reason="Authorization header missing or not Bearer",
-                context={"auth_header_present": bool(auth)},
+                context={"auth_header_present": bool(adapter.get_header("Authorization"))},
             )
-        token = auth.removeprefix(_BEARER_PREFIX).strip()
-        try:
-            payload = self._jwt.decode(  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-                token,
-                self.secret,
-                algorithms=[self.algorithm],
-            )
-        except self._jwt.PyJWTError as exc:  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
-            raise TenantExtractionError(
-                strategy_name=type(self).__name__,
-                reason=f"JWT decode failed: {exc}",
-                context={"claim": self.claim, "algorithm": self.algorithm},
-            ) from exc
-
-        tenant = payload.get(self.claim)
-        if not tenant:
-            raise TenantExtractionError(
-                strategy_name=type(self).__name__,
-                reason=f"JWT claim {self.claim!r} missing or empty",
-                context={"claim": self.claim},
-            )
-        return TenantId(str(tenant))
+        return result

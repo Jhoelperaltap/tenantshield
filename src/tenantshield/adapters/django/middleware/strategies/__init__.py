@@ -16,6 +16,9 @@ from typing import TYPE_CHECKING, cast
 
 from django.core.exceptions import ImproperlyConfigured
 
+from tenantshield.adapters.django.middleware.strategies._request_adapter import (
+    DjangoRequestAdapter,
+)
 from tenantshield.adapters.django.middleware.strategies.base import (
     TenantExtractionStrategy,
 )
@@ -101,6 +104,7 @@ def resolve_strategy(config: Mapping[str, object]) -> TenantExtractionStrategy:
 
 __all__ = [
     "CallableStrategy",
+    "DjangoRequestAdapter",
     "HeaderStrategy",
     "JWTStrategy",
     "SubdomainStrategy",

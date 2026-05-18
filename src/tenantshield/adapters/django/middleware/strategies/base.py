@@ -1,10 +1,17 @@
-"""TenantExtractionStrategy Protocol -- contract for tenant extraction.
+"""TenantExtractionStrategy Protocol -- Django adapter contract for strategies.
 
-All extraction strategies (Subdomain, Header, JWT, Callable) implement
-this Protocol. The Protocol is runtime-checkable for ergonomics
-(isinstance(obj, TenantExtractionStrategy) works in tests) but the
-canonical way to declare conformance is structural typing without
-explicit inheritance.
+Phase 4B Decision 6-A: this module preserves the Phase 2B adopter
+Protocol typed against ``HttpRequest`` (narrower than the cross-adapter
+core Protocol typed against ``RequestProtocol``). The Django Protocol
+is distinct from :class:`tenantshield.strategies.TenantExtractionStrategy`
+at the type-system level; runtime conformance checks (
+``isinstance(obj, ...)``) match structurally for both Protocols because
+``runtime_checkable`` Protocol only verifies method names.
+
+Strategies in this Django adapter module subclass the cross-adapter
+core implementations to share extraction logic but type their ``extract``
+method against ``HttpRequest`` for adopter clarity and mypy/pyright
+compatibility with the Django middleware layer.
 """
 
 from __future__ import annotations
@@ -24,7 +31,7 @@ class TenantExtractionStrategy(Protocol):
     Implementations must not bind or scope the tenant; that is the
     middleware's responsibility. The strategy is pure: input is the
     request, output is the tenant id (or a raised
-    TenantExtractionError).
+    TenantExtractionError per Phase 2B contract).
     """
 
     def extract(self, request: HttpRequest) -> TenantId:

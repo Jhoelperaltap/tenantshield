@@ -1,29 +1,36 @@
-"""SubdomainStrategy -- extract tenant from the request's subdomain.
+"""SubdomainStrategy -- Django adapter shim over ``tenantshield.strategies.HostStrategy``.
 
-For a host like 'acme.example.com' or 'acme.example.com:8000', the
-tenant id is 'acme' (the leftmost label). Hosts with fewer than three
-dot-separated labels (e.g., 'example.com', 'localhost') cannot yield
-a subdomain and raise TenantExtractionError.
+Phase 4B Decision 5-B + 6-A: ``HostStrategy`` is the cross-adapter
+canonical name; Django adopters keep the ``SubdomainStrategy`` symbol
+as an alias preserving Phase 2B import paths and behavior. The Django
+strategy subclasses the cross-adapter ``HostStrategy``, internally
+wraps ``HttpRequest`` in ``DjangoRequestAdapter``, and translates the
+core return-``None``-on-failure contract back to Phase 2B
+raise-on-failure.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tenantshield import TenantId
 from tenantshield.adapters.django.exceptions import TenantExtractionError
+from tenantshield.adapters.django.middleware.strategies._request_adapter import (
+    DjangoRequestAdapter,
+)
+from tenantshield.strategies import HostStrategy as _CoreHostStrategy
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
-# A host yields a subdomain only when it has at least three dot-separated
-# labels: <subdomain>.<domain>.<tld>. Fewer labels (e.g. 'example.com',
-# 'localhost') cannot produce a tenant identifier.
-_MIN_HOST_LABELS_FOR_SUBDOMAIN = 3
+    from tenantshield._types import TenantId
 
 
-class SubdomainStrategy:
-    """Extract tenant from the leftmost label of the request host.
+class SubdomainStrategy(_CoreHostStrategy):
+    """Extract tenant from the leftmost label of the request host (Phase 2B name).
+
+    Subclass of :class:`tenantshield.strategies.HostStrategy` preserving
+    the Phase 2B ``SubdomainStrategy`` adopter symbol with single-tier
+    raise-on-failure semantics.
 
     Examples:
         - 'acme.example.com'      -> 'acme'
@@ -34,20 +41,26 @@ class SubdomainStrategy:
     Implements the TenantExtractionStrategy Protocol structurally.
     """
 
-    def extract(self, request: HttpRequest) -> TenantId:
+    def extract(self, request: HttpRequest) -> TenantId:  # type: ignore[override]
         """Return the subdomain as TenantId, or raise.
+
+        Type narrowing vs core (``RequestProtocol`` -> ``HttpRequest``,
+        ``TenantId | None`` -> ``TenantId``) is intentional per Phase 2B
+        contract preservation.
 
         Raises:
             TenantExtractionError: when the host has fewer than three
-                dot-separated labels.
+                dot-separated labels (Phase 2B contract preservation).
         """
-        host = request.get_host()
-        host_no_port = host.split(":", 1)[0]
-        parts = host_no_port.split(".")
-        if len(parts) < _MIN_HOST_LABELS_FOR_SUBDOMAIN:
+        adapter = DjangoRequestAdapter(request)
+        result = super().extract(adapter)
+        if result is None:
+            host = request.get_host()
+            host_no_port = host.split(":", 1)[0]
+            parts = host_no_port.split(".")
             raise TenantExtractionError(
                 strategy_name=type(self).__name__,
                 reason=f"Cannot extract subdomain from host {host_no_port!r}",
                 context={"host": host_no_port, "parts": parts},
             )
-        return TenantId(parts[0])
+        return result
