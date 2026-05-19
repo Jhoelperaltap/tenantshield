@@ -7,9 +7,177 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(Pending entries for Block C Phase 5 closure work: examples cross-validation,
-Phase 5 pin audit per Rule 61, ``__version__`` bump 0.4.0a0 -> 0.5.0a0 per
-Rule 49 Pattern P1, and Phase 5 root closure ceremony.)
+(Pending entries for Phase 6 work or post-Phase-5 consolidation.)
+
+## [0.5.0-alpha] -- 2026-05-18
+
+Phase 5: Production hardening -- AsyncSession middleware + observability +
+audit dual-pattern realization.
+
+### Phase 5 summary
+
+Phase 5 of TenantShield extends the Phase 4 SQLAlchemy adapter foundation
+con two architectural pillars, completing the AsyncSession arc opened in
+Phase 4A and realizing the audit infrastructure intent reserved since
+Sub-phase 1B:
+
+- **Sub-fase 5A (``v0.5.0-alpha.0``)** -- AsyncSession middleware
+  completion. Delivers ``AsyncTenantSessionMiddleware``, an ASGI-native
+  async middleware wrapping requests in ``async with
+  AsyncSessionScope(...)``. Parallel API surface to Phase 4A
+  ``TenantSessionMiddleware`` (Decision 2-A); Phase 4A dual-mode
+  resolver coexists permanently (Decision 3-C). Adopters choose based
+  on architectural preference (async-native semantics vs Phase 3B / 4A
+  backward compat). Phase 4A foundation comprehensive inheritance
+  enabled trajectory compression 6 → 4 tareas (α + μ Owner
+  ratifications).
+- **Sub-fase 5B (``v0.5.0-alpha.1``)** -- Production hardening:
+  observability + audit dual-pattern. Delivers ``tenantshield.observability``
+  module emitting 9 structured events across scope lifecycle (3) +
+  enforcement (4) + middleware (2) via structlog. Disabled by default
+  per Decision 6-A (~6 ns/call gate empirically validated). Adopter-
+  extensible processor chain enables OpenTelemetry + Prometheus
+  integration con zero TenantShield-side coupling. Audit-observability
+  dual-pattern coexistence per Decision 7-A: pre-existing Sub-phase 1B
+  audit bus + new observability module operate at distinct semantic
+  levels (policy/decision vs operation/lifecycle); independent gating
+  mechanisms (sink registry vs ``is_enabled()`` flag) preserve adopter
+  control. ``ENFORCEMENT_VIOLATION`` audit emission gap filled at 5
+  cross-tenant write sites in ``events.py`` (Sub-tarea 5B.5.1
+  helper-pattern dual-dispatch) -- Sub-phase 1B reserved enum
+  (``audit.py:43``) finally realized.
+
+### Phase 5 architectural milestones
+
+- **AsyncSession architectural arc complete.** Phase 4A foundation
+  (``AsyncSessionScope`` + ``bind_async_session_to_tenant`` + dual-mode
+  middleware resolver) + Sub-fase 5A ``AsyncTenantSessionMiddleware``
+  deliver a full async-native enforcement stack with explicit
+  async ctx mgr semantics throughout.
+- **Decision 7-A audit-observability separation operational by
+  construction + verified empirically at runtime in productive code path.**
+  3-scenario matrix (Sub-tarea 5B.5.0) + cross-tenant INSERT runtime
+  smoke (Sub-tarea 5B.5.1) confirm independent gating: audit fires
+  regardless of observability state; observability fires regardless of
+  sink registry state.
+- **5 of 6 AuditEventType values now emit in productive code.**
+  Sub-phase 1B reserved enum realization complete: ``CONTEXT_BOUND`` +
+  ``CONTEXT_RELEASED`` (``context.py``) + ``POLICY_ALLOW`` +
+  ``POLICY_DENY`` (``policies.evaluate_and_audit``) + ``ENFORCEMENT_VIOLATION``
+  (Sub-tarea 5B.5.1 ``events.py`` dual-dispatch). Only ``SINK_FAILURE``
+  remains bus-internal.
+- **Phase 4A architectural compound dividends at maximum.** Single
+  observability integration point in ``events.py`` covers both sync
+  ``Session`` and async ``AsyncSession`` paths transitively via
+  ``AsyncSession.sync_session_class = Session`` event delegation. Zero
+  new event listener registration needed for async coverage.
+- **Best Phase BLOCKER profile sustained.** 0 architectural BLOCKERs
+  across both Sub-fase 5A and Sub-fase 5B (paralelo Phase 4 best-profile
+  precedent). 41 consecutive empirical-first tareas sustained through
+  the full Phase 5 arc.
+- **Multi-adopter distribution readiness.** Comprehensive adopter
+  integration documentation (6 files under ``docs/observability/``:
+  quick-start + dual-pattern + async migration + production checklist
+  + OpenTelemetry + Prometheus) operational per Owner strategic intent.
+
+### Acceptance gates (10/10 met for Phase 5)
+
+- 541 library tests + 16 example tests = 557 total on Python 3.13 +
+  SA 2.0.49 + aiosqlite 0.22.1 + fastapi 0.136.1 + httpx 0.28.1.
+- Library coverage 99.63% (above gate 95%; +0.03 vs Phase 4 99.60%).
+- mypy strict + pyright clean + ruff clean + 13/13 pre-commit hooks
+  + mkdocs --strict: all green.
+- Public surface 38 top-level symbols (unchanged from Phase 4)
+  + ``tenantshield.observability`` namespace (13 symbols).
+- 9 observability events operational + 5 ``ENFORCEMENT_VIOLATION``
+  audit dual-dispatch sites + 18 total observability emission sites
+  (4 pre-existing audit + 5 new ENFORCEMENT_VIOLATION at sub-tarea
+  5B.5.1).
+- 12 ADRs (0001-0012); ADR-0011 + ADR-0012 added Phase 5.
+- 43 active DRs (DR-027 SKIPPED preserved); DR-037..DR-044 added
+  Phase 5.
+- 6 adopter documentation files under ``docs/observability/``.
+- 0 architectural BLOCKERs Phase 5 (best Phase profile sustained).
+- 41 consecutive empirical-first tareas sustained.
+
+### Added -- Phase 5 cumulative public surface
+
+Sub-fase 5A:
+
+- ``tenantshield.adapters.sqlalchemy.AsyncTenantSessionMiddleware`` --
+  ASGI-native async middleware (Decision 2-A parallel API surface).
+
+Sub-fase 5B:
+
+- ``tenantshield.observability`` namespace (13 symbols):
+  ``configure``, ``is_enabled``, ``ALL_EVENTS``, ``EVENT_SEVERITY``,
+  and 9 ``EVENT_*`` constants for the scope lifecycle + enforcement +
+  middleware taxonomy.
+
+Dev dependencies (Sub-fase 5A.3):
+
+- ``fastapi>=0.115,<1.0`` for FastAPI integration tests.
+- ``httpx>=0.27,<1.0`` for TestClient.
+
+Adopter dependency surface UNCHANGED (no new runtime deps; ``structlog``
+already pinned as base dep per DR-010).
+
+### Changed -- Phase 5 cumulative
+
+- ``tenantshield.adapters.sqlalchemy.lifecycle.SessionScope`` and
+  ``async_lifecycle.AsyncSessionScope`` emit ``tenant.scope.*``
+  observability events (additive; disabled-default).
+- ``tenantshield.adapters.sqlalchemy.events`` write enforcement handlers
+  emit ``tenant.write.*`` / ``tenant.read.*`` observability events
+  (additive; disabled-default) and dispatch
+  ``AuditEvent(event_type=ENFORCEMENT_VIOLATION, ...)`` at 5
+  cross-tenant write sites (registry-gated, independent of
+  observability state).
+- All three middleware variants (``TenantSessionMiddleware``,
+  ``AsyncTenantSessionMiddleware``, ``TenantSessionMiddlewareWSGI``)
+  emit ``tenant.middleware.request_bound`` /
+  ``tenant.middleware.request_unbound`` events (additive; disabled-default).
+
+### Architectural Decision Records added in Phase 5
+
+- **ADR-0011** -- Observability architecture (Sub-fase 5B Tarea 5B.7).
+- **ADR-0012** -- Audit-observability dual-pattern (Sub-fase 5B Tarea
+  5B.7; Sub-tarea 5B.5.2 dual-pattern rationale folded per Sub-tarea
+  5B.5.0 anticipated structure).
+
+### Decision Records added in Phase 5
+
+- **DR-037** -- ``AsyncTenantSessionMiddleware`` parallel API surface.
+- **DR-038** -- Async lifecycle integrated via ``sync_session_class``
+  event delegation.
+- **DR-039** -- 9-event observability taxonomy + severity tiering.
+- **DR-040** -- structlog-based emission mechanism.
+- **DR-041** -- Disabled-by-default emission control.
+- **DR-042** -- Dedicated audit logger separation (Decision 7-A
+  consummation).
+- **DR-043** -- Adopter integration patterns (OpenTelemetry / Prometheus).
+- **DR-044** -- Async / sync integration testing methodology.
+
+DR materialization continues monotonically from DR-028 (Sub-fase 4A)
+through DR-044 (Sub-fase 5B). DR-027 remains SKIPPED per Sub-fase 3B
+scope refinement.
+
+### Notes
+
+- ``__version__`` bumped ``0.4.0a0`` → ``0.5.0a0`` (Tarea 5C.2; Rule 49
+  Pattern P1 5th application en historia del proyecto: Phases 1 → 2 →
+  3 → 4 → 5).
+- Rule 61 pin audit (Tarea 5C.1) outcome: audit-only Option ο. Phase 4
+  → Phase 5 cadence ~24 hours empirical; zero Rule 32-eligible
+  widenings at audit moment. Phase 5+ housekeeping backlog: 9 items (3
+  pre-existing examples-related + 6 monitor pins carried + new
+  fastapi / httpx Sub-fase 5A.3 deps; all <14d aged).
+- Pre-existing ADR-0009 + ADR-0010 mkdocs nav omissions preserved
+  (unrelated cleanup per "do not widen scope"); ADR-0011 + ADR-0012
+  added to nav per the ADR-0001..0008 canonical pattern.
+- All Phase 5 sub-fase tags preserved (``v0.5.0-alpha.0``,
+  ``v0.5.0-alpha.1``) plus Phase 5 root tag ``v0.5.0-alpha`` applied
+  in Tarea 5C.4.
 
 ## [0.5.0-alpha.1] -- 2026-05-18
 
