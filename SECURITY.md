@@ -10,7 +10,7 @@ This table will be revised when `v1.0.0` is released.
 
 ## Reporting a Vulnerability
 
-Report security issues by email to <!-- TODO: replace with real email once GitHub repo is created --> `security@example.invalid`.
+Report security issues by email to `security@ejsupportit.com`.
 
 - Initial acknowledgement within 72 hours of receipt.
 - Do not report vulnerabilities through public GitHub issues, pull requests, discussions, or any other public channel.
