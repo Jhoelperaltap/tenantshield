@@ -7,7 +7,130 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(Pending entries for Sub-fase 5B work and subsequent Phase 5 closure.)
+### Decision Records
+
+Sub-fase 5A retroactive (DR-037..038):
+
+- **DR-037** -- ``AsyncTenantSessionMiddleware`` parallel API surface.
+  Phase 5A delivers an ASGI-native async middleware running ``async with
+  AsyncSessionScope(...)`` internally, parallel to Phase 4A's
+  ``TenantSessionMiddleware`` running ``with SessionScope(...)`` (Decision
+  2-A from the Phase 5 kickoff Mass A ratification). Both middlewares
+  coexist permanently per Decision 3-C; adopters choose based on
+  architectural preference (async-native semantics vs Phase 3B / 4A
+  backward compat). Materialized in Sub-fase 5A.1 commit ``48541c6``.
+- **DR-038** -- Async lifecycle hooks integrated via shared
+  ``sync_session_class`` event delegation. Phase 3A SA event listeners
+  registered on ``Session`` automatically fire for ``AsyncSession``
+  operations because SQLAlchemy routes async dispatch through
+  ``AsyncSession.sync_session_class = Session``. Zero new event listener
+  registration was required for ``AsyncSession`` enforcement or
+  observability; emission integration applies transitively to both
+  sync and async paths (Tarea 4A.0 Scenarios 3-4 + Sub-fase 5B.4).
+
+Sub-fase 5B (DR-039..044):
+
+- **DR-039** -- 9-event observability taxonomy + severity tiering.
+  Three semantic groups: scope lifecycle (entered / exited / exception),
+  enforcement (write.injected / write.blocked / read.filtered /
+  read.fallthrough), middleware (request_bound / request_unbound).
+  Severity distribution 5 DEBUG + 2 INFO + 2 WARNING empirically informed
+  via Sub-fase 5B.0 Scenario #1 -- high-volume operational events
+  (write.injected, read.filtered, read.fallthrough, middleware.*)
+  default to DEBUG to bound production log volume. (Origen: Sub-fase
+  5B.0 + 5B.1; canonical taxonomy module
+  ``src/tenantshield/observability/events.py``.)
+- **DR-040** -- structlog-based emission mechanism. ``structlog`` was
+  already pinned as a base dep (DR-010, ``>=25.0,<26.0``) to support
+  ``StructLogSink``; reusing it for observability adds zero new
+  transitive dependencies. Adopter-extensible processor chain enables
+  canonical OpenTelemetry / Prometheus integration without
+  TenantShield-side coupling. (Origen: Sub-fase 5B.0 Scenarios #2 +
+  #4.)
+- **DR-041** -- Disabled-by-default emission control.
+  ``tenantshield.observability.configure(emit_events=False)`` is the
+  default; adopters explicitly enable. The disabled-default gate adds
+  ~6 ns/call overhead (1 M-iteration benchmark Sub-fase 5B.0 Scenario
+  #3), well under the <100 ns acceptance threshold. Phase 4 adopters
+  who do not enable observability experience zero log volume change.
+- **DR-042** -- Dedicated audit logger separation (Decision 7-A
+  consummation). The Sub-phase 1B audit bus uses
+  ``structlog.get_logger("tenantshield.audit")`` (default
+  ``StructLogSink`` logger, ``audit.py:138``); observability uses
+  ``structlog.get_logger("tenantshield.observability")``. Independent
+  gating mechanisms (sink registry vs ``is_enabled()`` flag) verified
+  empirically via 3-scenario matrix (Sub-fase 5B.5.0). The
+  ``ENFORCEMENT_VIOLATION`` emission gap (defined in ``audit.py:43``
+  since Sub-phase 1B but emitted nowhere) was filled in Sub-fase 5B.5.1
+  via helper-pattern dual-dispatch at 5 ``WRITE_BLOCKED`` sites in
+  ``events.py``. Architectural intent realized: 5 of 6
+  ``AuditEventType`` values now emit in productive code.
+- **DR-043** -- Adopter integration patterns. OpenTelemetry context
+  propagation (``trace_id`` / ``span_id``) and Prometheus metrics
+  (``Counter`` / ``Histogram``) integrate via custom structlog
+  processors prepended to the adopter's chain. Zero TenantShield-side
+  coupling: ``structlog.configure(...)`` is NOT called by the library.
+  Documented in ``docs/observability/integration/opentelemetry.md`` and
+  ``docs/observability/integration/prometheus.md`` (Sub-fase 5B.6).
+- **DR-044** -- Async / sync integration testing methodology.
+  Observability emission tests cover both sync ``SessionScope`` and async
+  ``AsyncSessionScope`` paths via mock-based unit tests (paralelo Phase
+  4A.5 + 5A.1 mock infrastructure precedent) plus real ASGI framework
+  integration via FastAPI ``TestClient`` (Sub-fase 5A.3 precedent
+  extended to observability emission in 5B.2 / 5B.4). Middleware events
+  ordered emission verified canonically (``request_bound`` ->
+  ``scope.entered`` -> ``scope.exited`` -> ``request_unbound``).
+
+DR materialization continues monotonically from DR-028 (Sub-fase 4A)
+through DR-044 (Sub-fase 5B); DR-027 remains SKIPPED per Sub-fase 3B
+scope refinement.
+
+### Architectural Decision Records
+
+- **ADR-0011** -- Observability architecture (Sub-fase 5B). Documents
+  six architectural pillars: 9-event taxonomy (Decision 4-A + DR-039),
+  structlog emission mechanism (Decision 5-A + DR-040), disabled-by-
+  default emission control (Decision 6-A + DR-041), distinct logger
+  namespace (separation from ``tenantshield.audit``), emission
+  integration without architectural disruption (additive at every
+  site; Phase 3A + 4A untouched), and adopter-extensible processor
+  chain (DR-043). Three alternatives rejected with rationale (extend
+  audit bus / stdlib logging / always-on emission). Empirical evidence
+  cross-references Sub-fase 5B.0 Scenarios + 5B.1 through 5B.4
+  implementation arc.
+- **ADR-0012** -- Audit-observability dual-pattern (Sub-fase 5B).
+  Documents the architectural decision for coexistence of the
+  Sub-phase 1B audit bus and the Sub-fase 5B observability module.
+  Five pillars: semantic separation by granularity (policy vs
+  operation), Decision 7-A separation by independent gating, dual-
+  dispatch at WRITE_BLOCKED sites (helper-pattern Option (ii)),
+  pre-existing audit emission sites preserved, architectural outcome
+  realizing pre-existing Sub-phase 1B intent (5 of 6
+  ``AuditEventType`` values now emit). Three alternatives rejected
+  (inline duplication / auto-chain / unified single-layer). Decision
+  7-A operational by construction + verified empirically at runtime in
+  Sub-fase 5B.5.1. Sub-tarea 5B.5.2 ADR-0012 dual-pattern rationale
+  folded into this ADR per Sub-tarea 5B.5.0 anticipated structure.
+
+### Notes
+
+- 5 of 6 ``AuditEventType`` values now emit in productive code:
+  ``CONTEXT_BOUND`` / ``CONTEXT_RELEASED`` (``context.py``),
+  ``POLICY_ALLOW`` / ``POLICY_DENY`` (``policies.evaluate_and_audit``),
+  ``ENFORCEMENT_VIOLATION`` (Sub-fase 5B.5.1 ``events.py`` dual-
+  dispatch). Only ``SINK_FAILURE`` is bus-internal (emitted by the
+  bus's own error-recovery path when a registered sink raises).
+- Sub-phase 1B audit bus + tests preserved without modification: 29
+  existing audit tests pass unchanged. The dual-dispatch helper is
+  additive at the SA adapter enforcement sites.
+- ADR-0011 + ADR-0012 added to ``mkdocs.yml`` nav per the ADR-0001..0008
+  canonical pattern. Pre-existing ADR-0009 + ADR-0010 nav omissions
+  preserved (unrelated cleanup) per "do not widen scope" project
+  discipline.
+
+(Sub-fase 5B closure ceremony in Tarea 5B.8 will promote this
+ [Unreleased] block to ``[0.5.0-alpha.1]`` with full closure summary +
+ tag.)
 
 ## [0.5.0-alpha.0] -- 2026-05-18
 

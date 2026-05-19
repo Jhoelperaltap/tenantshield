@@ -52,6 +52,8 @@ nav:
     - "0006 - SQLAlchemy 2.0 only": adr/0006-sqlalchemy-2-0-only.md
     - "0007 - Event-based enforcement (SQLAlchemy)": adr/0007-event-based-enforcement.md
     - "0008 - Middleware lifecycle design (SQLAlchemy)": adr/0008-middleware-lifecycle-design.md
+    - "0011 - Observability architecture": adr/0011-observability-architecture.md
+    - "0012 - Audit-observability dual-pattern": adr/0012-audit-dual-pattern.md
 
 markdown_extensions:
   - admonition
