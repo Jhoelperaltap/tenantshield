@@ -3,6 +3,70 @@
 **Multi-tenant enforcement engine for Python — prevent cross-tenant data leaks
 by construction, not convention.**
 
+## The Problem
+
+Multi-tenant SaaS applications can leak data across tenant boundaries
+when a single forgotten `.filter(tenant_id=...)` slips into production.
+The leak is silent: queries succeed, responses look normal, and the
+breach is often detected only when affected tenants report seeing
+data that isn't theirs.
+
+The root cause is structural: tenant scoping is typically enforced by
+**convention** (developers remembering to filter), not by the **system**.
+One missed filter, one new query path, one ORM method that bypasses
+the scoped manager — and the boundary is gone.
+
+## Before TenantShield
+
+```python
+# Django: tenant scoping by convention -- one forgotten filter leaks.
+class InvoiceView(View):
+    def get(self, request):
+        # Correct: scoped to current tenant
+        invoices = Invoice.objects.filter(tenant_id=request.tenant.id)
+        return JsonResponse({"invoices": list(invoices.values())})
+
+    def export_all(self, request):
+        # LEAK: no tenant filter -- returns ALL tenants' invoices.
+        invoices = Invoice.objects.all()
+        return JsonResponse({"invoices": list(invoices.values())})
+```
+
+The bug compiles. Tests pass unless they explicitly cover cross-tenant
+isolation. Production traffic returns wrong-tenant data. No exception
+is raised.
+
+## After TenantShield
+
+```python
+# Same model, with TenantShield: scoping is enforced by the system.
+from tenantshield.adapters.django import tenant_aware
+
+@tenant_aware
+class Invoice(models.Model):
+    tenant_id = models.CharField(max_length=64)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    # ... rest of model
+
+class InvoiceView(View):
+    def get(self, request):
+        invoices = Invoice.objects.all()  # auto-scoped to request.tenant
+        return JsonResponse({"invoices": list(invoices.values())})
+
+    def export_all(self, request):
+        # STILL auto-scoped -- no way to forget.
+        invoices = Invoice.objects.all()
+        return JsonResponse({"invoices": list(invoices.values())})
+```
+
+Outside a tenant context (e.g., a misconfigured background worker), the
+same query raises `MissingTenantContextError` instead of silently
+returning unscoped data. Cross-tenant writes raise
+`CrossTenantAccessError` before the SQL executes.
+
+What was a convention developers had to remember at every call site
+becomes a constraint the system enforces by default.
+
 TenantShield is a layer over existing ORMs (Django, SQLAlchemy) and request
 frameworks (Django, FastAPI, Flask, any ASGI/WSGI application) that enforces
 tenant scoping automatically. The default policy is **deny-by-default**: any
