@@ -1788,7 +1788,7 @@ requires-dist = [
     { name = "sqlalchemy", marker = "extra == 'sqlalchemy'", specifier = ">=2.0,<3.0" },
     { name = "structlog", specifier = ">=25.0,<26.0" },
 ]
-provides-extras = ["all", "celery", "dev", "django", "drf", "jwt", "sqlalchemy"]
+provides-extras = ["dev", "django", "drf", "jwt", "sqlalchemy"]
 
 [[package]]
 name = "tomli"

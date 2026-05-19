@@ -9,19 +9,18 @@ description = "Multi-tenant enforcement engine for Python. Prevents cross-tenant
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
-authors = [{ name = "TenantShield Contributors" }]
+authors = [{ name = "Jhoel Peralta", email = "jhoelperaltap@gmail.com" }]
 keywords = [
     "multi-tenant",
     "saas",
     "security",
     "django",
     "sqlalchemy",
-    "celery",
     "drf",
     "tenant-isolation",
 ]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
@@ -29,8 +28,12 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Framework :: Django",
+    "Framework :: FastAPI",
+    "Framework :: AsyncIO",
     "Topic :: Security",
     "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Database",
     "Typing :: Typed",
 ]
 dependencies = [
@@ -47,11 +50,9 @@ jwt = [
 sqlalchemy = [
     "sqlalchemy>=2.0,<3.0",
 ]
-celery = []
 drf = [
     "djangorestframework>=3.17.1,<4.0",
 ]
-all = []
 dev = [
     "ruff>=0.6,<1.0",
     "mypy>=1.11,<2.0",

@@ -20,6 +20,7 @@ venv/
 .ruff_cache/
 .tox/
 .nox/
+.hypothesis/
 
 # Coverage
 htmlcov/
@@ -40,6 +41,7 @@ site/
 CLAUDE.md
 PHASE_*_KICKOFF.md
 PHASE_*_CLOSURE.md
+_scratch_*
 .claude/
 .aider*
 .cursor*
