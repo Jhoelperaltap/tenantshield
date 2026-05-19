@@ -42,6 +42,11 @@ from sqlalchemy import event
 from sqlalchemy.orm import Session, with_loader_criteria
 
 from tenantshield import TenantId, try_current_tenant
+from tenantshield.audit import (
+    AuditEvent,
+    AuditEventType,
+)
+from tenantshield.audit import emit as audit_emit
 from tenantshield.exceptions import (
     CrossTenantAccessError,
     MissingTenantContextError,
@@ -59,9 +64,45 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import ORMExecuteState
     from sqlalchemy.orm.mapper import Mapper
 
+    from tenantshield import TenantContext
+
 
 _TENANT_ID_COLUMN_NAME = "tenant_id"
 _TENANT_AWARE_SENTINEL = "__tenantshield_tenant_aware__"
+
+
+def _emit_enforcement_violation_audit(
+    ctx: TenantContext,
+    attempted_tenant_id: str | None,
+    mapper: Mapper[Any],
+    operation: str,
+) -> None:
+    """Dispatch ``ENFORCEMENT_VIOLATION`` to the audit bus.
+
+    Sub-fase 5B.5.1 dual-dispatch companion to the observability
+    ``EVENT_WRITE_BLOCKED`` emission. Audit dispatch is gated by the
+    sink registry (independent of observability ``configure``) per
+    Decision 7-A separation.
+
+    Args:
+        ctx: Active tenant context bound at the time of the violation.
+        attempted_tenant_id: The cross-tenant value the caller tried to
+            write, or ``None`` for UPDATE/DELETE missing-tenant_id paths.
+        mapper: SA mapper for the model class involved.
+        operation: ``"before_insert"`` / ``"before_update"`` /
+            ``"before_delete"``.
+    """
+    audit_emit(
+        AuditEvent(
+            event_type=AuditEventType.ENFORCEMENT_VIOLATION,
+            tenant_context=ctx,
+            payload={
+                "attempted_tenant_id": attempted_tenant_id,
+                "model_class": mapper.class_.__qualname__,
+                "operation": operation,
+            },
+        )
+    )
 
 
 def _before_insert_handler(
@@ -121,6 +162,12 @@ def _before_insert_handler(
             tenant_id=str(ctx.tenant_id),
             attempted_tenant_id=str(target_tenant),
             model_class=mapper.class_.__qualname__,
+            operation="before_insert",
+        )
+        _emit_enforcement_violation_audit(
+            ctx=ctx,
+            attempted_tenant_id=str(target_tenant),
+            mapper=mapper,
             operation="before_insert",
         )
         raise CrossTenantAccessError(
@@ -183,6 +230,12 @@ def _before_update_handler(
             model_class=mapper.class_.__qualname__,
             operation="before_update",
         )
+        _emit_enforcement_violation_audit(
+            ctx=ctx,
+            attempted_tenant_id=None,
+            mapper=mapper,
+            operation="before_update",
+        )
         raise CrossTenantAccessError(
             tenant_id_expected=ctx.tenant_id,
             tenant_id_actual=None,
@@ -196,6 +249,12 @@ def _before_update_handler(
             tenant_id=str(ctx.tenant_id),
             attempted_tenant_id=str(target_tenant),
             model_class=mapper.class_.__qualname__,
+            operation="before_update",
+        )
+        _emit_enforcement_violation_audit(
+            ctx=ctx,
+            attempted_tenant_id=str(target_tenant),
+            mapper=mapper,
             operation="before_update",
         )
         raise CrossTenantAccessError(
@@ -253,6 +312,12 @@ def _before_delete_handler(
             model_class=mapper.class_.__qualname__,
             operation="before_delete",
         )
+        _emit_enforcement_violation_audit(
+            ctx=ctx,
+            attempted_tenant_id=None,
+            mapper=mapper,
+            operation="before_delete",
+        )
         raise CrossTenantAccessError(
             tenant_id_expected=ctx.tenant_id,
             tenant_id_actual=None,
@@ -266,6 +331,12 @@ def _before_delete_handler(
             tenant_id=str(ctx.tenant_id),
             attempted_tenant_id=str(target_tenant),
             model_class=mapper.class_.__qualname__,
+            operation="before_delete",
+        )
+        _emit_enforcement_violation_audit(
+            ctx=ctx,
+            attempted_tenant_id=str(target_tenant),
+            mapper=mapper,
             operation="before_delete",
         )
         raise CrossTenantAccessError(
