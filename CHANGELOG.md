@@ -7,6 +7,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+(Pending entries for Block C Phase 5 closure work: examples cross-validation,
+Phase 5 pin audit per Rule 61, ``__version__`` bump 0.4.0a0 -> 0.5.0a0 per
+Rule 49 Pattern P1, and Phase 5 root closure ceremony.)
+
+## [0.5.0-alpha.1] -- 2026-05-18
+
+### Sub-fase 5B summary
+
+Sub-fase 5B delivers production-grade observability infrastructure plus the
+audit-observability dual-pattern realization. The 9-event observability
+taxonomy (scope lifecycle + enforcement + middleware) integrates with the
+pre-existing Sub-phase 1B audit bus via dual-dispatch at security-critical
+sites, filling the ``ENFORCEMENT_VIOLATION`` emission gap that had been
+reserved (``audit.py:43``) but unrealized since Sub-phase 1B.
+
+Architectural rationale:
+
+- 9-event taxonomy with severity distribution 5 DEBUG + 2 INFO + 2 WARNING
+  empirically informed via Sub-fase 5B.0 Scenario #1; high-volume operational
+  events default to DEBUG to bound production log volume.
+- structlog-based emission reuses the existing base dep (DR-010, no new
+  transitive dependencies); adopter-extensible processor chain enables
+  canonical OpenTelemetry + Prometheus integration without TenantShield-side
+  coupling.
+- Disabled-by-default emission control (``configure(emit_events=False)``)
+  preserves Phase 4 adopter zero log volume; ~6 ns/call gate overhead
+  (1 M-iteration benchmark Sub-fase 5B.0 Scenario #3).
+- Decision 7-A audit-observability separation operational by construction:
+  audit gated by sink registry, observability gated by ``is_enabled()``;
+  independent mechanisms verified empirically (Sub-fase 5B.5.0 + 5B.5.1).
+- Pre-existing Sub-phase 1B audit infrastructure respected per Option (c)
+  re-scope ratification (Sub-tarea 5B.1.5 architectural archaeology);
+  ``StructLogSink`` already uses ``tenantshield.audit`` logger namespace.
+- Phase 4A architectural compound dividends: AsyncSession enforcement +
+  observability inherit transitively via
+  ``AsyncSession.sync_session_class = Session`` event delegation -- single
+  integration point, dual-path coverage.
+
+### Added
+
+- ``tenantshield.observability`` module (4 files): ``events.py`` (9-event
+  taxonomy + severity map), ``config.py`` (``configure`` + ``is_enabled``),
+  ``_emit.py`` (emission entry point), ``__init__.py`` (public surface
+  re-exports). Disabled-default per Decision 6-A.
+- 9 observability events integrated across the enforcement surface:
+  ``tenant.scope.entered`` / ``tenant.scope.exited`` /
+  ``tenant.scope.exception`` (Tarea 5B.2 -- ``lifecycle.py`` +
+  ``async_lifecycle.py``); ``tenant.write.injected`` /
+  ``tenant.write.blocked`` / ``tenant.read.filtered`` /
+  ``tenant.read.fallthrough`` (Tarea 5B.3 -- ``events.py``);
+  ``tenant.middleware.request_bound`` / ``tenant.middleware.request_unbound``
+  (Tarea 5B.4 -- ``middleware.py`` across 3 middleware variants).
+- ``ENFORCEMENT_VIOLATION`` audit dual-dispatch helper
+  (``_emit_enforcement_violation_audit``) at 5 cross-tenant write sites in
+  ``events.py`` (Sub-tarea 5B.5.1): INSERT mismatch + UPDATE missing/mismatch
+  + DELETE missing/mismatch. Architectural intent realized: 5 of 6
+  ``AuditEventType`` values now emit in productive code.
+- Adopter documentation under ``docs/observability/`` (6 files): quick-start
+  + dual-pattern + async middleware migration + production checklist + OTel
+  + Prometheus integration (~460 LOC, Tarea 5B.6).
+
+### Acceptance gates (Sub-fase 5B, all met)
+
+- 541 library tests + 16 example tests = 557 total on Python 3.13.
+- 99.63% library coverage (preserved + improved through Sub-fase 5B; +0.03
+  vs Sub-fase 5A 99.60%).
+- 38 public surface symbols (top-level ``tenantshield`` unchanged) +
+  ``tenantshield.observability`` namespace (13 symbols re-exported under
+  the sub-module).
+- mypy strict + pyright strict + ruff + 13/13 pre-commit hooks +
+  ``mkdocs build --strict``: all green.
+- 38 consecutive empirical-first tareas sustained.
+- 0 architectural BLOCKERs Sub-fase 5B (best Phase profile sustained).
+
+### Architectural Decision Records
+
+- **ADR-0011** -- Observability architecture (Sub-fase 5B). Documents
+  six architectural pillars: 9-event taxonomy (Decision 4-A + DR-039),
+  structlog emission mechanism (Decision 5-A + DR-040), disabled-by-
+  default emission control (Decision 6-A + DR-041), distinct logger
+  namespace (separation from ``tenantshield.audit``), emission
+  integration without architectural disruption (additive at every
+  site; Phase 3A + 4A untouched), and adopter-extensible processor
+  chain (DR-043). Three alternatives rejected with rationale (extend
+  audit bus / stdlib logging / always-on emission). Empirical evidence
+  cross-references Sub-fase 5B.0 Scenarios + 5B.1 through 5B.4
+  implementation arc.
+- **ADR-0012** -- Audit-observability dual-pattern (Sub-fase 5B).
+  Documents the architectural decision for coexistence of the
+  Sub-phase 1B audit bus and the Sub-fase 5B observability module.
+  Five pillars: semantic separation by granularity (policy vs
+  operation), Decision 7-A separation by independent gating, dual-
+  dispatch at WRITE_BLOCKED sites (helper-pattern Option (ii)),
+  pre-existing audit emission sites preserved, architectural outcome
+  realizing pre-existing Sub-phase 1B intent (5 of 6
+  ``AuditEventType`` values now emit). Three alternatives rejected
+  (inline duplication / auto-chain / unified single-layer). Decision
+  7-A operational by construction + verified empirically at runtime in
+  Sub-fase 5B.5.1. Sub-tarea 5B.5.2 ADR-0012 dual-pattern rationale
+  folded into this ADR per Sub-tarea 5B.5.0 anticipated structure.
+
 ### Decision Records
 
 Sub-fase 5A retroactive (DR-037..038):
@@ -112,6 +213,26 @@ scope refinement.
   Sub-fase 5B.5.1. Sub-tarea 5B.5.2 ADR-0012 dual-pattern rationale
   folded into this ADR per Sub-tarea 5B.5.0 anticipated structure.
 
+### Architectural milestones
+
+- ``ENFORCEMENT_VIOLATION`` emission gap filled at 5 cross-tenant write
+  sites: Sub-phase 1B reserved enum (``audit.py:43``) finally realized
+  in productive code. 5 of 6 ``AuditEventType`` values now emit; only
+  ``SINK_FAILURE`` remains bus-internal.
+- Decision 7-A audit-observability separation operational by construction
+  AND verified empirically at runtime via Sub-fase 5B.5.0 3-scenario
+  matrix + Sub-fase 5B.5.1 productive code path verification.
+- Phase 4A architectural compound dividends operational at maximum:
+  single observability integration point covers both sync ``Session``
+  and async ``AsyncSession`` paths transitively via
+  ``sync_session_class`` event delegation.
+- Trajectory compression honored: Sub-tarea 5B.5.2 (ADR-0012 dual-pattern
+  rationale materialization) folded into Tarea 5B.7 ADR-0012 per
+  Sub-tarea 5B.5.0 anticipated structure.
+- Pool 4-style helper-extraction discipline operationalized across 4
+  consecutive feat-level tareas (5B.3 + 5B.4 + 5B.5.1 + 5B.6 / 5B.7
+  documentation): zero lint iteration sustained.
+
 ### Notes
 
 - 5 of 6 ``AuditEventType`` values now emit in productive code:
@@ -127,10 +248,21 @@ scope refinement.
   canonical pattern. Pre-existing ADR-0009 + ADR-0010 nav omissions
   preserved (unrelated cleanup) per "do not widen scope" project
   discipline.
+- ``__version__`` remains ``0.4.0a0`` (Rule 49 -- sub-fase tags preserve
+  version; bump occurs at Phase root tag only).
+- Pool 5B datapoints (12 captured: DP-5B-A through DP-5B-L) pre-registered;
+  consolidation deferred a Phase 5 closure roadmap v1.13 update per
+  Pool 4 consolidation precedent.
 
-(Sub-fase 5B closure ceremony in Tarea 5B.8 will promote this
- [Unreleased] block to ``[0.5.0-alpha.1]`` with full closure summary +
- tag.)
+### Pending -- Block C Phase 5
+
+- Examples cross-validation (paralelo Tarea 4C.0 pattern).
+- Phase 5 pin audit per Rule 61 (paralelo Tarea 4C.1 audit-only pattern).
+- ``__version__`` bump ``0.4.0a0`` -> ``0.5.0a0`` per Rule 49 Pattern P1
+  (5th application in project history).
+- CHANGELOG ``[0.5.0-alpha]`` Phase 5 closure entry.
+- Tag ``v0.5.0-alpha`` Phase 5 root + ``PHASE_5_CLOSURE.md`` (5th Phase
+  root tag in project history).
 
 ## [0.5.0-alpha.0] -- 2026-05-18
 
