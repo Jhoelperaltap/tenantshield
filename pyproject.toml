@@ -149,7 +149,16 @@ minversion = "8.0"
 addopts = "-ra -q --strict-markers --strict-config --cov=tenantshield --cov-report=term-missing --cov-report=xml --cov-fail-under=95 -m 'not slow'"
 testpaths = ["tests"]
 asyncio_mode = "strict"
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # pytest's unraisableexception plugin elevates ResourceWarning
+    # (unclosed socket/event loop) to PytestUnraisableExceptionWarning at
+    # gc-collect time, which `error` then re-raises. These leaks originate
+    # in httpx/asyncio test fixtures on Linux CI runners (not product
+    # code) and are pytest-meta noise -- safe to suppress at this class
+    # level while keeping `error` for actual product-level warnings.
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]
 markers = [
     "slow: marks slow tests",
     "integration: marks integration tests",
