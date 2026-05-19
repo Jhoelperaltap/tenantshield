@@ -19,3 +19,10 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 py-modules = ["app", "models"]
+
+[tool.pytest.ini_options]
+# Override root project pytest config inheritance. The example does NOT
+# participate in tenantshield library coverage measurement; tests here
+# validate the example end-to-end, not library internals.
+addopts = "-ra -q"
+testpaths = ["tests"]
