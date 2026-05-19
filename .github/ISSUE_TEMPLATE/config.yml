@@ -1,1 +1,9 @@
 blank_issues_enabled: false
+
+contact_links:
+  - name: Security Vulnerability Disclosure
+    url: https://github.com/Jhoelperaltap/tenantshield/blob/main/SECURITY.md
+    about: For security issues, please email security@ejsupportit.com privately. Do NOT use public issues.
+  - name: Documentation
+    url: https://jhoelperaltap.github.io/tenantshield/
+    about: Check the official documentation site for guides, ADRs, and API reference.
