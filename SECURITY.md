@@ -2,9 +2,10 @@
 
 ## Supported Versions
 
-| Version | Supported                  |
-|---------|----------------------------|
-| 0.0.x   | ❌ Pre-release, no support |
+| Version | Supported                                              |
+|---------|--------------------------------------------------------|
+| 0.5.x   | ⚠ Alpha pre-release — security fixes on best-effort basis |
+| < 0.5   | ❌ No support                                          |
 
 This table will be revised when `v1.0.0` is released.
 
