@@ -43,11 +43,15 @@ to leave alone. Register models with `@register_model` or
 
 ## Further reading
 
-- **[Security posture](security-posture.md)** -- the triple-layer defense
-  model (manager scope + audit + HARD REJECT) empirically validated
-  across three Counterbook adoption cycles (Phase 6).
+- **[Security posture](security-posture.md)** -- per-adapter
+  architectural defense model. Django adapter: three-layer opt-in
+  defense (Phase 6 cohort-driven). SQLAlchemy adapter: event-based
+  pre-SQL enforcement (Sub-fase 3A native, stronger default).
+- **[Cross-adapter parity matrix](cross-adapter-parity.md)** -- canonical
+  status of Phase 6 architectural extensions across Django and
+  SQLAlchemy adapters; Phase 7 candidate catalog (SA-USU.0 + SA-AUTO.0).
 - **[Adopter governance pattern](adopter-governance.md)** -- recommended
   adopter ADR-driven governance layer per TenantShield API surface.
-- **Architectural Decision Records** -- 13 ADRs documenting the
+- **Architectural Decision Records** -- 14 ADRs documenting the
   contracts adopters depend on. See the ADR section in the site
   navigation.

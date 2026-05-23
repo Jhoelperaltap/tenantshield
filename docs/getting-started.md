@@ -100,6 +100,61 @@ python -m pip --version    # verify pip is now in the venv
 
 Then proceed with the editable install above.
 
+## SQLAlchemy adapter: `with_for_update()` interaction
+
+SQLAlchemy adopters frequently use `Query.with_for_update()` (the
+SA equivalent of Django's `select_for_update()`) to acquire row
+locks during read-modify-write workflows. The interaction with
+TenantShield's enforcement layer is straightforward but worth
+documenting explicitly so the adopter does not assume the lock
+acquisition is a bypass surface.
+
+**Pattern**:
+
+```python
+from sqlalchemy.orm import Session
+
+with tenant_scope(bind_tenant(TenantId("acme"))):
+    with Session(engine) as session:
+        bind_session_to_tenant(session, current_tenant())
+        # with_for_update() preserves the tenant filter applied at
+        # query construction; the SELECT ... FOR UPDATE clause carries
+        # WHERE tenant_id = 'acme' just like any other scoped query.
+        invoice = (
+            session.query(Invoice)
+            .filter(Invoice.id == 42)
+            .with_for_update()
+            .one()
+        )
+        invoice.amount = 999
+        session.commit()
+```
+
+**Two facts to anchor**:
+
+1. **Tenant scope is applied at query construction**, not at lock
+   acquisition. The `WHERE tenant_id = <ctx>` clause is added by
+   the bound Session's `do_orm_execute` event listener; the lock
+   is an attribute of the SQL statement that the query builder
+   emits. Both compose orthogonally.
+2. **Cross-tenant attempts during the locked operation still
+   raise**. If the same caller attempted
+   `session.query(Invoice).filter(Invoice.id == 42).with_for_update().one()`
+   with `id=42` belonging to tenant `globex` instead of `acme`, the
+   SQL would return zero rows (the tenant filter narrows). If the
+   caller then attempted to `UPDATE` on a manually-constructed
+   cross-tenant target, the `before_update` event listener would
+   raise `CrossTenantAccessError` before the SQL executes — see
+   [Security posture §SQLAlchemy](concepts/security-posture.md#sqlalchemy-adapter-security-posture)
+   for the always-on pre-SQL enforcement model.
+
+Unlike Django's `select_for_update()` (which interacts with the
+`TenantAwareQuerySet`'s manager filter at the queryset level), SA's
+`with_for_update()` interacts with the `do_orm_execute` event
+listener at the SQL emission level. The architectural surfaces
+differ but the security guarantee is the same: lock acquisition
+does not bypass tenant enforcement.
+
 ## A minimal example
 
 ```python

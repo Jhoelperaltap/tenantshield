@@ -35,6 +35,7 @@ nav:
   - Concepts:
     - Overview: concepts/index.md
     - Security posture: concepts/security-posture.md
+    - Cross-adapter parity: concepts/cross-adapter-parity.md
     - Adopter governance: concepts/adopter-governance.md
   - API Reference: api/index.md
   - Adapters: adapters/index.md
