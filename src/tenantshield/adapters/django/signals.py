@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextvars
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from django.db.models.signals import pre_delete, pre_save
@@ -12,7 +14,34 @@ from tenantshield.exceptions import CrossTenantAccessError, MissingTenantContext
 from tenantshield.registry import default_registry
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from django.db import models
+
+
+# ADR-0013 mode 3 -- ``_unsafe_unscoped`` paths set this flag to skip
+# pre_save/pre_delete validation. Uses ContextVar so async + threaded
+# execution paths preserve isolation (paralelo ``TenantContext`` semantics).
+_signal_bypass_var: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "tenantshield_signal_bypass",
+    default=False,
+)
+
+
+@contextmanager
+def _bypass_signal_validation() -> Generator[None, None, None]:  # pyright: ignore[reportUnusedFunction]
+    """Context manager that skips ``_validate_tenant_coherence`` for the scope.
+
+    Used by ``UnsafeUnscopedManager`` write paths (ADR-0013 mode 3) so
+    that signal-driven write validation does not block legitimate
+    administrative operations. Every wrapped operation MUST emit an
+    ``ENFORCEMENT_BYPASS`` audit event before entering the scope.
+    """
+    token = _signal_bypass_var.set(True)
+    try:
+        yield
+    finally:
+        _signal_bypass_var.reset(token)
 
 
 def _validate_tenant_coherence(
@@ -27,6 +56,11 @@ def _validate_tenant_coherence(
         CrossTenantAccessError: if the instance's tenant_id differs from
             the active context's tenant_id.
     """
+    if _signal_bypass_var.get():
+        # ADR-0013 mode 3 -- ``_unsafe_unscoped`` bypass. Audit emission
+        # happens at the manager level before the bypass scope is entered.
+        return
+
     ctx = try_current_tenant()
     if ctx is None:
         raise MissingTenantContextError(

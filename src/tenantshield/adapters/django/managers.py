@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
+import traceback
 from typing import TYPE_CHECKING
 
 from django.db import models
 
+from tenantshield.adapters.django.signals import (
+    _bypass_signal_validation,  # pyright: ignore[reportPrivateUsage]
+)
+from tenantshield.audit import AuditEvent, AuditEventType
+from tenantshield.audit import emit as audit_emit
 from tenantshield.context import try_current_tenant
 from tenantshield.exceptions import MissingTenantContextError
 from tenantshield.registry import default_registry
 
 if TYPE_CHECKING:
+    from collections.abc import Collection, Iterable
     from typing import Self
 
 
@@ -116,3 +123,165 @@ class TenantAwareManager(models.Manager.from_queryset(TenantAwareQuerySet)):  # 
         # it from the companion Manager class is the documented contract,
         # not external private access.
         return qs._apply_tenant_filter()  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+
+
+# ADR-0013 mode 3 -- ``_unsafe_unscoped`` queryset + manager.
+#
+# Distinguishing properties vs ``Model.objects`` (mode 1) and
+# ``Model._unscoped`` (mode 2):
+#
+# - No tenant filter (parallel to mode 2).
+# - Pre-save / pre-delete signal validation is bypassed for writes
+#   (mode 3 unique).
+# - Every write emits an ``ENFORCEMENT_BYPASS`` audit event with caller
+#   stack context, paralelo the SA adapter's
+#   ``_emit_enforcement_violation_audit`` precedent
+#   (``adapters/sqlalchemy/events.py:74-105``).
+#
+# The bypass is implemented as a ``ContextVar`` flag (see
+# ``signals.py:_signal_bypass_var``) so async / threaded execution paths
+# preserve isolation. Read operations (``filter``, ``all``, etc.) do not
+# emit audit events; only writes carry the bypass semantic.
+
+
+def _emit_enforcement_bypass_audit(
+    model: type[models.Model],
+    operation: str,
+    operation_context: dict[str, object],
+) -> None:
+    """Dispatch ``ENFORCEMENT_BYPASS`` to the audit bus.
+
+    Companion to ``_emit_enforcement_violation_audit`` in the SA adapter
+    (Sub-fase 5B.5.1). Bypass audit emission is gated by the sink
+    registry (independent of observability ``configure``) per Decision
+    7-A separation. Audit fires unconditionally at every write entry
+    point of ``UnsafeUnscopedManager`` / ``UnsafeUnscopedQuerySet``.
+
+    Args:
+        model: The model class on which the bypass was exercised.
+        operation: One of ``"create"`` / ``"update"`` / ``"delete"`` /
+            ``"bulk_create"`` / ``"bulk_update"``.
+        operation_context: Operation-specific structured payload (e.g.,
+            ``{"count": N}`` for bulk paths, ``{"fields": [...]}`` for
+            updates).
+    """
+    audit_emit(
+        AuditEvent(
+            event_type=AuditEventType.ENFORCEMENT_BYPASS,
+            tenant_context=try_current_tenant(),
+            payload={
+                "model_qualname": f"{model.__module__}.{model.__qualname__}",
+                "operation": operation,
+                "operation_context": operation_context,
+                "caller_stack_frames": traceback.format_stack()[:-2],
+            },
+        )
+    )
+
+
+class UnsafeUnscopedQuerySet(models.QuerySet):  # type: ignore[type-arg]
+    """QuerySet for ``_unsafe_unscoped``: no tenant filter, audited writes.
+
+    See ADR-0013. Every write operation emits an ``ENFORCEMENT_BYPASS``
+    audit event and bypasses ``pre_save``/``pre_delete`` validation where
+    applicable. Read operations (``filter``, ``all``, etc.) inherit from
+    Django's ``QuerySet`` unchanged.
+    """
+
+    def create(self, **kwargs: object) -> models.Model:
+        _emit_enforcement_bypass_audit(
+            self.model,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
+            "create",
+            {"kwargs_keys": sorted(kwargs.keys())},
+        )
+        with _bypass_signal_validation():
+            # super().create is typed as Any-returning through unparametrized
+            # QuerySet; the concrete value is a Model instance per Django
+            # contract.
+            instance: models.Model = super().create(**kwargs)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType, reportAssignmentType]
+        return instance  # pyright: ignore[reportUnknownVariableType]
+
+    def update(self, **kwargs: object) -> int:
+        _emit_enforcement_bypass_audit(
+            self.model,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
+            "update",
+            {"fields_keys": sorted(kwargs.keys())},
+        )
+        # Django QuerySet.update() does not fire pre_save signals; the
+        # ``_bypass_signal_validation`` scope is unnecessary here but
+        # harmless if added. Omitted to keep the write path minimal.
+        return super().update(**kwargs)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+
+    def delete(self) -> tuple[int, dict[str, int]]:
+        _emit_enforcement_bypass_audit(
+            self.model,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
+            "delete",
+            {"count_before": self.count()},
+        )
+        # QuerySet.delete() loads instances and fires pre_delete per
+        # instance, so signal bypass is required here.
+        with _bypass_signal_validation():
+            return super().delete()  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+
+    def bulk_create(  # noqa: PLR0913
+        self,
+        objs: Iterable[models.Model],
+        batch_size: int | None = None,
+        ignore_conflicts: bool = False,
+        update_conflicts: bool = False,
+        update_fields: Collection[str] | None = None,
+        unique_fields: Collection[str] | None = None,
+    ) -> list[models.Model]:
+        # Convert to list so len() and pass-through both work; Django
+        # iterates objs internally anyway.
+        objs_list = list(objs)
+        _emit_enforcement_bypass_audit(
+            self.model,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
+            "bulk_create",
+            {"count": len(objs_list)},
+        )
+        # bulk_create does not fire pre_save in Django; bypass scope is
+        # unnecessary. Audit emission is the only enforcement signal.
+        return super().bulk_create(  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+            objs_list,
+            batch_size=batch_size,
+            ignore_conflicts=ignore_conflicts,
+            update_conflicts=update_conflicts,
+            update_fields=update_fields,
+            unique_fields=unique_fields,
+        )
+
+    def bulk_update(
+        self,
+        objs: Iterable[models.Model],
+        fields: Iterable[str],
+        batch_size: int | None = None,
+    ) -> int:
+        objs_list = list(objs)
+        fields_list = list(fields)
+        _emit_enforcement_bypass_audit(
+            self.model,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
+            "bulk_update",
+            {"count": len(objs_list), "fields": fields_list},
+        )
+        return super().bulk_update(  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+            objs_list,
+            fields_list,
+            batch_size=batch_size,
+        )
+
+
+class UnsafeUnscopedManager(models.Manager.from_queryset(UnsafeUnscopedQuerySet)):  # type: ignore[misc]
+    """Manager for ``_unsafe_unscoped``: no tenant filter, audited writes.
+
+    ADR-0013 mode 3. Installed as ``Model._unsafe_unscoped`` by the
+    ``@tenant_aware`` decorator alongside ``Model.objects`` (mode 1) and
+    ``Model._unscoped`` (mode 2). Intended for legitimate administrative
+    operations only: bulk migrations, periodic Celery tasks, system-level
+    housekeeping. Every write emits an ``ENFORCEMENT_BYPASS`` audit event;
+    adopters should whitelist call sites with an inline
+    ``# ENFORCEMENT_BYPASS: <reason>`` comment per recommended adopter
+    policy.
+    """
+
+    use_in_migrations: bool = False

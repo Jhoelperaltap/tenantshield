@@ -41,6 +41,7 @@ class AuditEventType(StrEnum):
     POLICY_ALLOW = "policy_allow"
     POLICY_DENY = "policy_deny"
     ENFORCEMENT_VIOLATION = "enforcement_violation"
+    ENFORCEMENT_BYPASS = "enforcement_bypass"
     SINK_FAILURE = "sink_failure"
 
 

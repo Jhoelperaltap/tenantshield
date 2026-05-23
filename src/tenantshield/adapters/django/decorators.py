@@ -66,7 +66,10 @@ def tenant_aware(
     """
     # Imported here to break the import cycle with managers.py importing
     # from registry which is imported from here.
-    from tenantshield.adapters.django.managers import TenantAwareManager  # noqa: PLC0415
+    from tenantshield.adapters.django.managers import (  # noqa: PLC0415
+        TenantAwareManager,
+        UnsafeUnscopedManager,
+    )
 
     def _wrap(cls: type[models.Model]) -> type[models.Model]:
         if manager_class is not None:
@@ -106,9 +109,11 @@ def tenant_aware(
             if not (m.name == "objects" and type(m) is models.Manager)  # pyright: ignore[reportUnknownArgumentType]
         ]
 
-        # Install TenantAwareManager + _unscoped escape hatch.
+        # Install TenantAwareManager + _unscoped read-only escape hatch +
+        # _unsafe_unscoped write escape hatch (ADR-0013 three-mode contract).
         cls.add_to_class("objects", TenantAwareManager())
         cls.add_to_class("_unscoped", models.Manager())
+        cls.add_to_class("_unsafe_unscoped", UnsafeUnscopedManager())
 
         # Connect pre_save/pre_delete signals for write-path validation.
         # Deferred import for consistency with the TenantAwareManager import
