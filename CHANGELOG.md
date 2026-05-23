@@ -9,6 +9,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 (No pending entries.)
 
+## [0.6.1-alpha] -- 2026-05-23 (Phase 6.1 polish layer)
+
+Polish + cross-adapter parity hotfix layer (Path γ + α hybrid) consolidating
+the post-Phase-6 cross-adapter audit (D-AUDIT-SA-PARITY, 2026-05-23)
+findings with Counterbook reference-adopter feedback signals.
+
+### Documentation (Path γ shipped `755c0e3`)
+
+- **SA adapter security posture** documented (event-based pre-SQL
+  enforcement strength; Sub-fase 3A vintage native).
+- **Cross-adapter parity matrix** as canonical reference
+  (`docs/concepts/cross-adapter-parity.md`): per-extension parity status
+  Django vs SA + Phase 7 candidate catalog.
+- **SA `with_for_update()` interaction** docs (Finding #7 SA-applicable
+  subset).
+
+### Documentation (Path α hotfix)
+
+- **TestPyPI `explicit = true` integration pattern docs** (Item-29).
+  Empirical discovery from Counterbook `#011-PHASE6-CLOSURE`: TestPyPI
+  requires `[[tool.uv.index]] explicit = true` to isolate the index to
+  TenantShield only; without it, `uv` consults TestPyPI for the entire
+  dependency tree and breaks on missing transitives. Pattern documented
+  in `docs/getting-started.md`.
+
+### SA adapter Category 3 trivials (Path α hotfix)
+
+- **`tenant_scope_for_model(instance)` DX shortcut**
+  (`adapters.sqlalchemy.scopes`). SA parity surface for Django's
+  `tenant_scope_for_company` (D-DX.0). Reads `instance.id` and wraps in
+  `tenant_scope(bind_tenant(TenantId(str(...))))`.
+- **SA tenant-aware model registry** + **migration metadata helper**
+  (`adapters.sqlalchemy.migrations`). Surfaces `TenantAwareModelMetadata`
+  dataclass + `tenant_aware_models()` iterator + `get_model_metadata()`
+  lookup. Mirrors Django D-MIG.0 API names. Implementation uses module-
+  level `_registered_models: set[type]` populated by the `@tenant_aware`
+  decorator at decoration time (**Option A** architectural decision per
+  D-HOTFIX-v061; minimum-invasive vs gc-graph inspection or adopter-
+  provided `Base.registry` traversal).
+
+### Architectural follow-ups catalogued
+
+Phase 7+ candidates surfaced by D-AUDIT-SA-PARITY:
+
+- **Item 31** — SA-USU.0: `_unsafe_unscoped` SA equivalent +
+  `ENFORCEMENT_BYPASS` SA emission (anticipated ~3-5h architectural
+  work + 8-12 tests).
+- **Item 32** — SA-AUTO.0: SA FK auto-propagation via `before_insert`
+  handler (anticipated ~3-4h + 6-8 tests).
+- **Item 33** — SA `audit_cross_tenant_attempts` soft-mode (LOW
+  priority; SA's hard-mode pre-SQL raise is architecturally stronger).
+- **Item 34** — Cross-adapter parity matrix expansion as new adapters
+  ship.
+- **Item 35** (NEW) — Item-30 (Django constraint `>=5.2,<6.0`)
+  **deferred** to Phase 7+ pending formal ADR-0003 supersedure
+  decision. ADR-0003 commits TenantShield to supporting Django 4.2 LTS
+  via empirical CI testing; tightening the constraint to `>=5.2`
+  requires superseding ADR-0003 and reverting the `9e4e126` CVE
+  override architectural rationale. Catalogued as a standalone
+  architectural decision, not a metadata fix.
+
+### Phase 6 archive ceremonial preserved
+
+- `v0.6.0-alpha` tag immutable.
+- `v0.6.1-alpha` is polish layer extension, **NOT** a Phase 6
+  architectural reopening.
+- Pattern Cluster G refined: cross-adapter audits surface gaps **and**
+  counter-strengths (Rule 79 candidate pending future ratification).
+- Pattern Cluster H further extension: D-HOTFIX-v061 Decision Tree
+  escalation surfaced 3 empirical discrepancies in spec before
+  implementation, paralelo D-FIX.0 / D-MEM.0 / D-USU.0 / D-NEST.0 /
+  D-VAL.0 archaeology pattern.
+
+### Breaking changes
+
+NONE. Additive only; fully backward-compatible with `v0.6.0-alpha`.
+
+### Empirical-first protocol
+
+- 84+ consecutive empirical-first tareas sustained through Phase 6.1.
+- DR-004 enforcement clean across 4 atomic commits + tag.
+- Rule 49 P1 EXTENSION **5th application** (Phase 6 incremental release
+  pattern: 0.5.1 → 0.5.2 → 0.5.3 → 0.5.4 → **0.6.1**).
+
 ## [0.6.0-alpha] -- 2026-05-23
 
 Phase 6: First cohort-validated alpha. Driven empirically by Counterbook
