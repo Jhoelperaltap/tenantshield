@@ -22,6 +22,7 @@ def tenant_aware(
     *,
     tenant_field: str = ...,
     manager_class: type[models.Manager[models.Model]] | None = ...,
+    audit_cross_tenant_attempts: bool = ...,
 ) -> Callable[[type[models.Model]], type[models.Model]]: ...
 
 
@@ -31,6 +32,7 @@ def tenant_aware(
     *,
     tenant_field: str = "tenant_id",
     manager_class: type[models.Manager[models.Model]] | None = None,
+    audit_cross_tenant_attempts: bool = False,
 ) -> type[models.Model] | Callable[[type[models.Model]], type[models.Model]]:
     """Mark a Django model as tenant-aware.
 
@@ -38,7 +40,9 @@ def tenant_aware(
     registry, (2) installs ``TenantAwareManager`` as the model's default
     manager (raising ``ConfigurationError`` if the model already has a
     custom manager and ``manager_class`` is not provided), (3) installs
-    ``_unscoped`` as an escape-hatch manager.
+    ``_unscoped`` as an escape-hatch manager, (4) installs
+    ``_unsafe_unscoped`` (ADR-0013 mode 3) as the write-escape manager
+    that emits ``ENFORCEMENT_BYPASS`` audit events.
 
     Examples:
         Basic usage::
@@ -54,11 +58,27 @@ def tenant_aware(
             class Org(models.Model):
                 org_id = models.CharField(max_length=64)
 
+        Compliance posture (SOC2 / PCI-DSS)::
+
+            @tenant_aware(audit_cross_tenant_attempts=True)
+            class CustomerPayment(models.Model):
+                tenant_id = models.CharField(max_length=64)
+                amount = models.DecimalField(max_digits=10, decimal_places=2)
+
     Args:
         model: The model class to decorate. If None, returns a decorator.
         tenant_field: Name of the field carrying the tenant id. Default: ``tenant_id``.
         manager_class: Optional manager class to compose with TenantAwareManager.
             Reserved for Sub-phase 2A.X; raises NotImplementedError if provided.
+        audit_cross_tenant_attempts: When ``True``, every
+            ``Model.objects.filter(...).update(...)`` and ``.delete()``
+            performs a pre-flight unscoped query that detects PKs matching
+            the caller's other filters but belonging to OTHER tenants. Each
+            such attempt emits an ``ENFORCEMENT_VIOLATION`` audit event
+            with the attempted PKs + caller stack frames. OFF by default
+            per ADR-0013 + adopter noise management. Enable for compliance
+            posture (SOC2 Type II, PCI-DSS); resolves Finding #1
+            (SOC2 BLOCKER: silent cross-tenant update/delete).
 
     Raises:
         ConfigurationError: if the model already has a custom default manager
@@ -114,6 +134,12 @@ def tenant_aware(
         cls.add_to_class("objects", TenantAwareManager())
         cls.add_to_class("_unscoped", models.Manager())
         cls.add_to_class("_unsafe_unscoped", UnsafeUnscopedManager())
+
+        # ADR-0013 + Finding #1: store audit configuration on the class. Read
+        # at queryset update/delete time by TenantAwareQuerySet to enable
+        # cross-tenant attempt detection. Off by default for noise control;
+        # enabled per-model for SOC2/PCI-DSS compliance posture.
+        cls._tenantshield_audit_cross_tenant = audit_cross_tenant_attempts  # type: ignore[attr-defined]
 
         # Connect pre_save/pre_delete signals for write-path validation.
         # Deferred import for consistency with the TenantAwareManager import

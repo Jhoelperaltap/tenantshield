@@ -94,6 +94,19 @@ class TenantAwareQuerySet(models.QuerySet):  # type: ignore[type-arg]
         qs: Self = super().exclude(*args, **kwargs)
         return qs._apply_tenant_filter()
 
+    def update(self, **kwargs: object) -> int:
+        # ADR-0013 + Finding #1 (SOC2 BLOCKER): when audit_cross_tenant_attempts
+        # is enabled on the model, detect cross-tenant PKs that match the user's
+        # filters but belong to other tenants. Detection is pre-flight (before
+        # the SQL UPDATE executes) so the audit event captures the attempt even
+        # when the operation yields zero affected rows.
+        _maybe_emit_cross_tenant_violation(self, "update")
+        return super().update(**kwargs)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+
+    def delete(self) -> tuple[int, dict[str, int]]:
+        _maybe_emit_cross_tenant_violation(self, "delete")
+        return super().delete()  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+
 
 # Dynamic base class via from_queryset is the idiomatic Django pattern but
 # django-stubs cannot type it through subclassing. The single ignore below
@@ -142,6 +155,135 @@ class TenantAwareManager(models.Manager.from_queryset(TenantAwareQuerySet)):  # 
 # ``signals.py:_signal_bypass_var``) so async / threaded execution paths
 # preserve isolation. Read operations (``filter``, ``all``, etc.) do not
 # emit audit events; only writes carry the bypass semantic.
+
+
+# ADR-0013 + Finding #1 (SOC2 BLOCKER) -- cross-tenant audit detection.
+#
+# When a model is decorated with ``@tenant_aware(audit_cross_tenant_attempts=True)``,
+# every ``Model.objects.filter(...).update(...)`` and ``.delete()`` call
+# performs a pre-flight check: clone the queryset's query, strip the tenant
+# filter from the WHERE tree, execute against ``Model._unscoped`` with an
+# explicit ``exclude(tenant_field=current)`` to find PKs that match the
+# user's other filters but belong to OTHER tenants. If any are found, emit
+# ``ENFORCEMENT_VIOLATION`` with the attempted PKs + caller stack frames.
+#
+# This catches the SOC2 attack vector: an actor iterating PKs in an update
+# or delete to probe other tenants. Currently the SQL ``WHERE tenant_id=X
+# AND pk=N`` simply returns 0 affected rows when ``pk=N`` belongs to a
+# different tenant; the actor learns nothing and leaves no forensic trace.
+# With audit enabled, every such attempt generates an observable audit
+# event that SIEM tooling can detect.
+#
+# OFF by default per ADR-0013 + adopter noise management. Enable per-model
+# for compliance posture (SOC2 Type II, PCI-DSS).
+
+
+def _strip_clauses_for_field(where_node: object, field_name: str) -> None:
+    """Recursively remove WHERE clauses referencing ``field_name`` from a tree.
+
+    Mutates ``where_node.children`` in place. Used to build a sibling query
+    that has the user's filters minus the tenant filter, so we can detect
+    cross-tenant matches against ``Model._unscoped``.
+
+    Django-internal API surface (WhereNode + Lookup); defensive against
+    upstream changes (caller wraps in try/except).
+    """
+    children = getattr(where_node, "children", None)
+    if children is None:
+        return
+    new_children: list[object] = []
+    for child in children:  # pyright: ignore[reportUnknownVariableType]
+        if hasattr(child, "children"):
+            _strip_clauses_for_field(child, field_name)
+            inner = getattr(child, "children", None)
+            if inner:
+                new_children.append(child)  # pyright: ignore[reportUnknownArgumentType]
+            continue
+        target_col: str | None = None
+        lhs = getattr(child, "lhs", None)
+        if lhs is not None:
+            target = getattr(lhs, "target", None)
+            if target is not None:
+                target_col = getattr(target, "column", None) or getattr(target, "name", None)
+        if target_col != field_name:
+            new_children.append(child)  # pyright: ignore[reportUnknownArgumentType]
+    where_node.children = new_children  # type: ignore[attr-defined]
+
+
+def _maybe_emit_cross_tenant_violation(
+    qs: models.QuerySet,  # type: ignore[type-arg]
+    operation: str,
+) -> None:
+    """Pre-flight detect cross-tenant ``update``/``delete`` attempts.
+
+    Inspects the model class for the ``_tenantshield_audit_cross_tenant``
+    flag set by ``@tenant_aware(audit_cross_tenant_attempts=True)``. When
+    set, builds a sibling queryset against ``Model._unscoped`` with the
+    same user filters but the tenant clause stripped + an explicit
+    exclusion of the current tenant. PKs returned by that sibling are
+    cross-tenant attempts and trigger ``ENFORCEMENT_VIOLATION`` emission.
+
+    Defensive against query manipulation failures: any exception in the
+    detection path is swallowed so the user's intended operation always
+    runs to completion.
+    """
+    model = qs.model  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    if not getattr(model, "_tenantshield_audit_cross_tenant", False):  # pyright: ignore[reportUnknownArgumentType]
+        return
+    ctx = try_current_tenant()
+    if ctx is None:
+        return
+    tenant_field = default_registry.get(model).tenant_field  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+    try:
+        cloned_query = qs.query.clone()  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        _strip_clauses_for_field(cloned_query.where, tenant_field)  # pyright: ignore[reportUnknownMemberType]
+        unscoped_manager = model._unscoped  # noqa: SLF001  # pyright: ignore[reportPrivateUsage, reportUnknownMemberType, reportUnknownVariableType]
+        unscoped_qs: models.QuerySet = unscoped_manager.all()  # type: ignore[type-arg]  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType, reportAssignmentType]
+        unscoped_qs.query = cloned_query  # pyright: ignore[reportUnknownMemberType]
+        other_tenant_qs = unscoped_qs.exclude(**{tenant_field: ctx.tenant_id})  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        other_tenant_pks: list[object] = sorted(other_tenant_qs.values_list("pk", flat=True))  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType, reportUnknownVariableType]
+    except Exception:
+        # Defensive: never break the user's operation due to detection issues.
+        return
+    if not other_tenant_pks:
+        return
+    _emit_enforcement_violation_audit(
+        model=model,  # pyright: ignore[reportUnknownArgumentType]
+        operation=operation,
+        attempted_pks=other_tenant_pks,
+    )
+
+
+def _emit_enforcement_violation_audit(
+    model: type[models.Model],
+    operation: str,
+    attempted_pks: list[object],
+) -> None:
+    """Dispatch ``ENFORCEMENT_VIOLATION`` to the audit bus for cross-tenant attempts.
+
+    Companion to ``_emit_enforcement_bypass_audit`` (ADR-0013 mode 3 audit
+    helper) and ``_emit_enforcement_violation_audit`` in the SA adapter
+    (``adapters/sqlalchemy/events.py``, Sub-fase 5B.5.1). Audit emission
+    is gated by the sink registry (independent of observability
+    ``configure``) per Decision 7-A separation.
+
+    Args:
+        model: The model class on which the cross-tenant attempt occurred.
+        operation: ``"update"`` or ``"delete"``.
+        attempted_pks: Sorted list of cross-tenant PKs the caller targeted.
+    """
+    audit_emit(
+        AuditEvent(
+            event_type=AuditEventType.ENFORCEMENT_VIOLATION,
+            tenant_context=try_current_tenant(),
+            payload={
+                "model_qualname": f"{model.__module__}.{model.__qualname__}",
+                "operation": operation,
+                "attempted_pks": attempted_pks,
+                "caller_stack_frames": traceback.format_stack()[:-2],
+            },
+        )
+    )
 
 
 def _emit_enforcement_bypass_audit(
