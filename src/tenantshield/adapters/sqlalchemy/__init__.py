@@ -88,6 +88,7 @@ from tenantshield.adapters.sqlalchemy.middleware import (
     TenantSessionMiddleware,
     TenantSessionMiddlewareWSGI,
 )
+from tenantshield.adapters.sqlalchemy.scopes import tenant_scope_for_model
 from tenantshield.strategies import (
     CallableStrategy,
     HeaderStrategy,
@@ -119,4 +120,5 @@ __all__ = [
     "bind_session_to_tenant",
     "resolve_strategy",
     "tenant_aware",
+    "tenant_scope_for_model",
 ]
