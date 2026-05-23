@@ -153,6 +153,13 @@ def tenant_aware(
         # enabled per-model for SOC2/PCI-DSS compliance posture.
         cls._tenantshield_audit_cross_tenant = audit_cross_tenant_attempts  # type: ignore[attr-defined]
 
+        # ADR-0013 + Finding #11: store auto-propagate flag on the class.
+        # The decision to connect the auto-propagate signal handler is taken
+        # below via ``connect_signals``; this attribute exists so adopter
+        # introspection (D-MIG.0 migration metadata helpers) can surface the
+        # decoration-time choice without inspecting Django signal internals.
+        cls._tenantshield_auto_propagate_from_parent_fk = auto_propagate_from_parent_fk  # type: ignore[attr-defined]
+
         # Connect pre_save/pre_delete signals for write-path validation.
         # Deferred import for consistency with the TenantAwareManager import
         # above; both modules live in the same package and could be top-level,
