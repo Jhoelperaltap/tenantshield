@@ -23,6 +23,7 @@ def tenant_aware(
     tenant_field: str = ...,
     manager_class: type[models.Manager[models.Model]] | None = ...,
     audit_cross_tenant_attempts: bool = ...,
+    auto_propagate_from_parent_fk: bool = ...,
 ) -> Callable[[type[models.Model]], type[models.Model]]: ...
 
 
@@ -33,6 +34,7 @@ def tenant_aware(
     tenant_field: str = "tenant_id",
     manager_class: type[models.Manager[models.Model]] | None = None,
     audit_cross_tenant_attempts: bool = False,
+    auto_propagate_from_parent_fk: bool = False,
 ) -> type[models.Model] | Callable[[type[models.Model]], type[models.Model]]:
     """Mark a Django model as tenant-aware.
 
@@ -79,6 +81,16 @@ def tenant_aware(
             per ADR-0013 + adopter noise management. Enable for compliance
             posture (SOC2 Type II, PCI-DSS); resolves Finding #1
             (SOC2 BLOCKER: silent cross-tenant update/delete).
+        auto_propagate_from_parent_fk: When ``True``, the ``pre_save``
+            signal auto-populates this model's ``tenant_field`` from the
+            first ``ForeignKey`` whose target model is also
+            ``@tenant_aware`` (declaration order is respected, first match
+            wins, deterministic). Skipped when ``tenant_field`` is already
+            set (explicit assignment honored) and when ``_signal_bypass_var``
+            is active (D-USU.0 compatibility). OFF by default. Eliminates
+            boilerplate ``child.company = parent.company`` patterns at
+            adopter call sites; resolves Finding #11 (Counterbook
+            ADR-0015 catalog).
 
     Raises:
         ConfigurationError: if the model already has a custom default manager
@@ -144,10 +156,11 @@ def tenant_aware(
         # Connect pre_save/pre_delete signals for write-path validation.
         # Deferred import for consistency with the TenantAwareManager import
         # above; both modules live in the same package and could be top-level,
-        # but the symmetry is intentional.
+        # but the symmetry is intentional. ``auto_propagate_from_parent_fk``
+        # toggles the FK-parent auto-populate handler (D-AUTO.0, Finding #11).
         from tenantshield.adapters.django.signals import connect_signals  # noqa: PLC0415
 
-        connect_signals(cls)
+        connect_signals(cls, auto_propagate_from_parent_fk=auto_propagate_from_parent_fk)
 
         return cls
 

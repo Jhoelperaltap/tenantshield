@@ -97,6 +97,55 @@ def _validate_tenant_coherence(
         )
 
 
+def _auto_propagate_tenant_from_fk_parent(
+    sender: type[models.Model],
+    instance: models.Model,
+    **kwargs: object,  # noqa: ARG001
+) -> None:
+    """Populate the instance tenant field from the first @tenant_aware FK parent.
+
+    ADR-0013 + Finding #11 (Counterbook ADR-0015 catalog). Connected by
+    ``connect_signals`` only when ``@tenant_aware(auto_propagate_from_parent_fk=True)``
+    is set on the model.
+
+    Behaviour:
+
+    - Skipped when ``_signal_bypass_var`` is active (D-USU.0 ``_unsafe_unscoped``
+      compatibility -- bypass operations stay literal).
+    - Skipped when the instance tenant field already has a truthy value
+      (respect explicit assignment from caller).
+    - Iterates ``_meta.get_fields()`` in declaration order; the first
+      ``ForeignKey`` whose target model is registered tenant-aware AND whose
+      current value carries a tenant id wins. Deterministic.
+    - Does not raise on missing FK relations or stale FK values; subsequent
+      ``_validate_tenant_coherence`` handles those (MissingTenantContextError
+      surfaces normally if no propagation source was found).
+    """
+    if _signal_bypass_var.get():
+        return
+
+    tenant_field = default_registry.get(sender).tenant_field
+    if getattr(instance, tenant_field, None):
+        return  # Caller already set tenant_field explicitly.
+
+    for field in sender._meta.get_fields():  # noqa: SLF001  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        if not getattr(field, "many_to_one", False):
+            continue
+        related_model: type[models.Model] | None = getattr(field, "related_model", None)
+        if related_model is None:
+            continue
+        if not default_registry.is_registered(related_model):
+            continue
+        fk_value: object = getattr(instance, field.name, None)  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+        if fk_value is None:
+            continue
+        parent_tenant_field = default_registry.get(related_model).tenant_field
+        parent_tenant = getattr(fk_value, parent_tenant_field, None)
+        if parent_tenant:
+            setattr(instance, tenant_field, parent_tenant)
+            return
+
+
 def _pre_save_handler(
     sender: type[models.Model],
     instance: models.Model,
@@ -113,12 +162,24 @@ def _pre_delete_handler(
     _validate_tenant_coherence(sender, instance, "pre_delete")
 
 
-def connect_signals(model: type[models.Model]) -> None:
+def connect_signals(
+    model: type[models.Model],
+    *,
+    auto_propagate_from_parent_fk: bool = False,
+) -> None:
     """Connect pre_save/pre_delete signals for a tenant-aware model.
 
-    Called by @tenant_aware decorator (Sub-phase 2A) after model registration.
+    Called by ``@tenant_aware`` decorator after model registration. When
+    ``auto_propagate_from_parent_fk`` is True, the auto-propagate handler
+    is connected BEFORE the validation handler so that FK-derived tenant
+    values are populated in time for coherence validation (Finding #11,
+    D-AUTO.0).
     """
     # django-stubs declares Signal.connect with `receiver: (...) -> Unknown`,
     # which pyright cannot narrow even though our handlers are concrete.
+    if auto_propagate_from_parent_fk:
+        # Connect auto-propagate FIRST so it fires before _pre_save_handler;
+        # Django dispatches signal receivers in connection order.
+        pre_save.connect(_auto_propagate_tenant_from_fk_parent, sender=model)  # pyright: ignore[reportUnknownMemberType]
     pre_save.connect(_pre_save_handler, sender=model)  # pyright: ignore[reportUnknownMemberType]
     pre_delete.connect(_pre_delete_handler, sender=model)  # pyright: ignore[reportUnknownMemberType]
