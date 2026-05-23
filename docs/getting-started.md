@@ -23,6 +23,47 @@ push (see [`.github/workflows/publish-testpypi.yml`](https://github.com/Jhoelper
 Until `v1.0.0` ships to public PyPI, TestPyPI is the canonical
 distribution channel for alpha releases.
 
+#### Best practice: `explicit = true` in `[[tool.uv.index]]`
+
+When integrating TestPyPI as a package source via `uv` configuration
+(not just the one-off `--index` flag), the adopter SHOULD configure
+the index with `explicit = true` to isolate TestPyPI consultation to
+TenantShield only:
+
+```toml
+# In adopter's pyproject.toml:
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+explicit = true  # CRITICAL: required for clean transitive dep resolution
+
+[project]
+dependencies = [
+    "tenantshield==0.6.0a0",
+    # ... other dependencies resolved from PyPI public
+]
+
+[tool.uv.sources]
+tenantshield = { index = "testpypi" }
+```
+
+**Why `explicit = true` is critical:** Without it, `uv` consults
+TestPyPI for the *entire* dependency tree. TestPyPI is a staging
+index — it does not host the full transitive surface that PyPI
+public does (e.g., `cryptography`, `pydantic`). The resolver breaks
+with missing transitive deps.
+
+`explicit = true` scopes TestPyPI consultation to packages explicitly
+listed in `[tool.uv.sources]` while letting `uv` resolve everything
+else from PyPI public. The result is a clean lockfile that pins
+TenantShield from TestPyPI and all transitives from PyPI.
+
+This pattern was discovered empirically by Counterbook (TenantShield
+reference adopter, mini-ticket #011) during the v0.6.0-alpha TestPyPI
+cutover. The same pattern applies to any adopter consuming TenantShield
+from TestPyPI until the v1.0.0 public PyPI release.
+
 ### From a GitHub tag (alternative for pre-`v0.6.0-alpha` versions)
 
 ```bash
