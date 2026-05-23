@@ -88,6 +88,11 @@ from tenantshield.adapters.sqlalchemy.middleware import (
     TenantSessionMiddleware,
     TenantSessionMiddlewareWSGI,
 )
+from tenantshield.adapters.sqlalchemy.migrations import (
+    TenantAwareModelMetadata,
+    get_model_metadata,
+    tenant_aware_models,
+)
 from tenantshield.adapters.sqlalchemy.scopes import tenant_scope_for_model
 from tenantshield.strategies import (
     CallableStrategy,
@@ -112,13 +117,16 @@ __all__ = [
     "MissingTenantContextError",
     "RequestProtocol",
     "SessionScope",
+    "TenantAwareModelMetadata",
     "TenantExtractionError",
     "TenantExtractionStrategy",
     "TenantSessionMiddleware",
     "TenantSessionMiddlewareWSGI",
     "bind_async_session_to_tenant",
     "bind_session_to_tenant",
+    "get_model_metadata",
     "resolve_strategy",
     "tenant_aware",
+    "tenant_aware_models",
     "tenant_scope_for_model",
 ]

@@ -73,6 +73,15 @@ if TYPE_CHECKING:
 
 _TENANT_ID_COLUMN_NAME = "tenant_id"
 
+# Phase 6.1 (D-HOTFIX-v061 Option A architectural decision): module-level
+# set populated by the ``@tenant_aware`` decorator at decoration time.
+# Read by the migration metadata helper (``migrations.py``) to enumerate
+# tenant-aware SA mapped classes without inspecting Python's gc graph or
+# the adopter's ``DeclarativeBase.registry``. Decoration-time registration
+# is the minimum-invasive parity surface vs Django's
+# ``default_registry.is_registered(model)`` lookup.
+_registered_models: set[type] = set()
+
 T = TypeVar("T", bound="type[DeclarativeBase]")
 
 
@@ -136,5 +145,9 @@ def tenant_aware(cls: T) -> T:
     setattr(cls, _TENANT_AWARE_SENTINEL, True)
 
     register_write_enforcement(cls)
+
+    # Phase 6.1 (Option A per D-HOTFIX-v061): track decorated classes for
+    # introspection by ``adapters.sqlalchemy.migrations.tenant_aware_models``.
+    _registered_models.add(cls)
 
     return cls
