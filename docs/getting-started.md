@@ -2,15 +2,84 @@
 
 ## Installation
 
+The supported install paths during the alpha series:
+
+### From the GitHub tag (recommended for adopters)
+
 ```bash
-pip install tenantshield
+pip install git+https://github.com/Jhoelperaltap/tenantshield.git@v0.5.4-alpha
+```
+
+### From the source tree (editable install for cohort dogfood)
+
+```bash
+git clone https://github.com/Jhoelperaltap/tenantshield
+cd tenantshield
+pip install -e .
 ```
 
 Or with `uv`:
 
 ```bash
-uv add tenantshield
+uv add "git+https://github.com/Jhoelperaltap/tenantshield.git@v0.5.4-alpha"
 ```
+
+### Adapter extras
+
+Install only the adapters you use:
+
+```bash
+pip install "tenantshield[django] @ git+https://github.com/Jhoelperaltap/tenantshield.git@v0.5.4-alpha"
+pip install "tenantshield[sqlalchemy] @ git+https://github.com/Jhoelperaltap/tenantshield.git@v0.5.4-alpha"
+pip install "tenantshield[drf] @ git+https://github.com/Jhoelperaltap/tenantshield.git@v0.5.4-alpha"
+pip install "tenantshield[jwt] @ git+https://github.com/Jhoelperaltap/tenantshield.git@v0.5.4-alpha"
+```
+
+## Troubleshooting installation
+
+### `uv: command not found` (no pip-only install path)
+
+The repository ships with `uv` as the recommended package manager,
+but `pip` is fully supported. Use the `pip install -e .` editable
+install shown above; `uv build` is **not** required for adopters
+who only need to install the library.
+
+### Windows multi-Python: `pip` resolves outside the virtualenv
+
+On Windows, having multiple Python installations can leave `pip.exe`
+pointing at the global interpreter even when a venv is active. Verify:
+
+```powershell
+Get-Command pip       # check the resolved path
+Get-Command python    # check the resolved path (should be in .venv\Scripts)
+```
+
+If `pip` resolves outside the active venv, always invoke through the
+venv's Python explicitly:
+
+```powershell
+python -m pip install -e "C:\path\to\tenantshield"
+```
+
+`python -m pip` uses the active interpreter's bundled pip, regardless
+of which `pip.exe` is first in `PATH`.
+
+### Venv created without pip (Microsoft Store Python, --without-pip)
+
+Some Python distributions create venvs without bundling pip. Symptom:
+
+```
+No module named pip
+```
+
+Bootstrap pip into the venv with Python core's built-in `ensurepip`:
+
+```powershell
+python -m ensurepip --upgrade
+python -m pip --version    # verify pip is now in the venv
+```
+
+Then proceed with the editable install above.
 
 ## A minimal example
 

@@ -40,3 +40,14 @@ Tracks which model classes are tenant-aware and which attribute carries
 the tenant id. Used by adapters (Phase 2+) to know what to filter and what
 to leave alone. Register models with `@register_model` or
 `register_model(Cls)`.
+
+## Further reading
+
+- **[Security posture](security-posture.md)** -- the triple-layer defense
+  model (manager scope + audit + HARD REJECT) empirically validated
+  across three Counterbook adoption cycles (Phase 6).
+- **[Adopter governance pattern](adopter-governance.md)** -- recommended
+  adopter ADR-driven governance layer per TenantShield API surface.
+- **Architectural Decision Records** -- 13 ADRs documenting the
+  contracts adopters depend on. See the ADR section in the site
+  navigation.

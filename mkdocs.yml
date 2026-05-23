@@ -32,7 +32,10 @@ plugins:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
-  - Concepts: concepts/index.md
+  - Concepts:
+    - Overview: concepts/index.md
+    - Security posture: concepts/security-posture.md
+    - Adopter governance: concepts/adopter-governance.md
   - API Reference: api/index.md
   - Adapters: adapters/index.md
   - Observability:
@@ -52,6 +55,8 @@ nav:
     - "0006 - SQLAlchemy 2.0 only": adr/0006-sqlalchemy-2-0-only.md
     - "0007 - Event-based enforcement (SQLAlchemy)": adr/0007-event-based-enforcement.md
     - "0008 - Middleware lifecycle design (SQLAlchemy)": adr/0008-middleware-lifecycle-design.md
+    - "0009 - AsyncSession adapter architecture": adr/0009-async-session-adapter-architecture.md
+    - "0010 - Cross-adapter strategy unification": adr/0010-cross-adapter-strategy-unification.md
     - "0011 - Observability architecture": adr/0011-observability-architecture.md
     - "0012 - Audit-observability dual-pattern": adr/0012-audit-dual-pattern.md
     - "0013 - Three-mode read/write semantics": adr/0013-three-mode-read-write-semantics.md

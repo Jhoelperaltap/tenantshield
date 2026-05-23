@@ -145,6 +145,28 @@ table below.
    ``# ENFORCEMENT_BYPASS: <reason>`` and pinned by a test that
    asserts the audit event was emitted with the expected payload.
 
+## §Mode 3 supplement -- interaction with ``auto_propagate_from_parent_fk``
+
+Empirically surfaced by Counterbook KG-013 during ``v0.5.3-alpha``
+adoption: when a model is decorated
+``@tenant_aware(auto_propagate_from_parent_fk=True)`` AND a write
+flows through ``Model._unsafe_unscoped.create(...)``, the
+auto-propagate pre_save handler is **bypassed** alongside
+``_validate_tenant_coherence``. This is consistent with the mode 3
+contract documented above ("bypass ALL signal validation") but is
+non-obvious to adopters who treat auto-propagate as a separate feature.
+
+Operational consequence: ``_unsafe_unscoped`` callers MUST set
+``tenant_field`` explicitly even when the equivalent ``Model.objects``
+path would have populated it from the FK parent. The bypass scope
+turns off the entire pre_save chain, not a subset of it.
+
+This is documentation-only; no code change is needed because the
+behaviour is correct per ``_signal_bypass_var`` semantics. Adopter
+codebases SHOULD assert this contract in tests when both flags are
+used together (Counterbook ADR-0025 + ADR-0027 codify the
+recommended pattern).
+
 ## Why other options rejected
 
 - **Option B** leaves Counterbook KG-003 unblocked indefinitely.
