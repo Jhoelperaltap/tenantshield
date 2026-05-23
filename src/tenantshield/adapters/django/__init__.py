@@ -10,6 +10,7 @@ from tenantshield.adapters.django.managers import (
     UnsafeUnscopedQuerySet,
 )
 from tenantshield.adapters.django.middleware import TenantContextMiddleware
+from tenantshield.adapters.django.scope import tenant_scope_for_company
 
 __all__ = [
     "TenantAwareManager",
@@ -18,4 +19,5 @@ __all__ = [
     "UnsafeUnscopedManager",
     "UnsafeUnscopedQuerySet",
     "tenant_aware",
+    "tenant_scope_for_company",
 ]

@@ -55,9 +55,20 @@ class AdapterError(TenantShieldError):
     """Base class for adapter-specific failures."""
 
 
+_MISSING_TENANT_CONTEXT_HINT = (
+    "Canonical pattern: `with tenant_scope(bind_tenant(TenantId(str(company.id)))):` "
+    "or Django shortcut: `with tenant_scope_for_company(company):` "
+    "(from `tenantshield.adapters.django`)."
+)
+
+
 @dataclass
 class MissingTenantContextError(TenantContextError):
     """Raised when an operation requires a tenant scope and none is active.
+
+    The auto-generated message includes a canonical-pattern hint pointing
+    callers at the documented entry-point shapes (raw API + Django
+    shortcut) per Finding #2 (Counterbook ADR-0015 catalog).
 
     Args:
         operation: A short label identifying the API or operation that needed
@@ -69,7 +80,10 @@ class MissingTenantContextError(TenantContextError):
     stack_context: Mapping[str, object] = field(default_factory=_empty_metadata)
 
     def __post_init__(self) -> None:
-        msg = f"Missing tenant context for operation {self.operation!r}."
+        msg = (
+            f"Missing tenant context for operation {self.operation!r}. "
+            f"{_MISSING_TENANT_CONTEXT_HINT}"
+        )
         super().__init__(msg)
 
     def to_dict(self) -> dict[str, object]:
