@@ -7,7 +7,182 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(Pending entries for Phase 6 work or post-Phase-5 consolidation.)
+(No pending entries.)
+
+## [0.6.0-alpha] -- 2026-05-23
+
+Phase 6: First cohort-validated alpha. Driven empirically by Counterbook
+adopter feedback (Track A); 13/13 ADR-0015 findings cleared across 5
+incremental releases and 4 Counterbook validation cycles.
+
+### Phase 6 summary
+
+- **Reference adopter**: Counterbook (Owner's parallel SaaS contable
+  project) integrated TenantShield ``v0.5.0a0`` in production-style work,
+  catalogued 13 architectural findings in ADR-0015, and empirically
+  validated each upstream release via 4 mini-tickets (#007 + #008 +
+  #009 + #010). Reference adopter status formalized post-#010.
+- **Findings cleared**: 12 RESOLVED via implementation + 1 PRE-RESOLVED
+  via Rule 70 archaeology (#5 Phase 2 startup checks) = 13/13.
+- **Pattern Clusters crystallized**: 7 (A 3-mode + Triple-layer
+  defense; B Silent → Observable; C DX sugar over primitives; D Django
+  integration polish; E Cross-session coordination; F Adopter ADR-driven
+  governance; G Adopter empirical exploration + saturation indicator;
+  H Empirical pragmatism). See ADR-0014 for full discussion.
+- **Rules added**: 74 (per-operation aggregation), 75 (inverse pinning
+  test convention), 76 (adopter ADR-driven governance), 77 (cohort
+  handover surfaces value beyond spec), 78 (empirical baseline +
+  pragmatic atomicity). See ADR-0014 §"Rules 74-78 ratified".
+- **Distribution**: D-DIST.0 introduces TestPyPI publish via OIDC on
+  every tag push. Adopters install via
+  ``pip install --index-url https://test.pypi.org/simple/ tenantshield``.
+- **Architectural foundation**: ADR-0013 (three-mode read/write
+  semantics) + ADR-0014 (retrospective). 14 ADRs total.
+- **Empirical-first protocol streak**: 71 consecutive tareas sustained
+  through Phase 6 closure.
+
+### v0.5.1-alpha -- D-USU.0 (Finding #10 HIGH)
+
+- ``Model._unsafe_unscoped`` manager attribute (ADR-0013 mode 3): no
+  tenant filter + bypass signal validation + emit
+  ``ENFORCEMENT_BYPASS`` audit event on every write with caller stack
+  frames. Resolves Counterbook KG-003 (4 sprints of accumulated
+  technical debt on individual INSERTs).
+- New ``AuditEventType.ENFORCEMENT_BYPASS`` (7th category, lowercase
+  ``"enforcement_bypass"``).
+- ``_signal_bypass_var`` ContextVar isolates the bypass scope; async
+  and threaded execution paths preserve isolation.
+- 13 behavioural tests covering all ADR-0013 invariants.
+- **Empirical bonus from Counterbook #007-KG003**: ``>10x performance
+  gain`` on bulk paths (600-800ms → <50ms wall time, 200 queries →
+  ≤10 queries). Counterbook ``apps.gl`` coverage 97% → 98%.
+
+### v0.5.2-alpha -- D-CTA.0 (Finding #1 SOC2 BLOCKER)
+
+- ``@tenant_aware(audit_cross_tenant_attempts=True)`` opt-in flag.
+  ``TenantAwareQuerySet.update()`` and ``.delete()`` perform a
+  pre-flight unscoped query that detects PKs matching the caller's
+  other filters but belonging to OTHER tenants. Each attempt emits
+  ``ENFORCEMENT_VIOLATION`` with attempted PKs + caller stack frames.
+- Resolves the silent zero-row write attack vector (SOC2 / PCI-DSS
+  posture). Default OFF for adopter noise management.
+- 12 behavioural tests; ``_strip_clauses_for_field`` helper for
+  Django WHERE-tree manipulation; defensive try/except so the user's
+  operation always runs.
+- **Empirical insight from Counterbook #008-CTA-AUDIT**: per-operation
+  aggregation (1 event per N-PK operation, NOT N events); caller-tenant
+  attribution semantically correct (originator NOT target);
+  ``caller_stack_frames`` empirically auditor-grade forensics; D-CTA.0
+  = "observability insurance" pattern (Counterbook organic codebase
+  never does bulk QuerySet mutation; the audit insures against future
+  developer accident).
+
+### v0.5.3-alpha -- Day 4 cluster (Findings #2 + #5 PRE-RESOLVED + #6 + #11)
+
+- **D-VAL.0 SKIPPED** per Rule 70 archaeology. Finding #5 (``@tenant_aware``
+  startup validation) was already covered by Phase 2 infrastructure
+  (system checks E001 + E002 + W001 + W002). Avoided
+  ``tenantshield.E001`` ID collision and duplicate function.
+- **D-DX.0** (Findings #2 + #6):
+  - ``MissingTenantContextError`` now includes a canonical pattern
+    hint by default (raw API + Django shortcut).
+  - ``tenant_scope_for_company(company)`` context manager accepts a
+    Django model instance directly, reducing
+    ``TenantId(str(company.id))`` verbosity. Counterbook adopted in
+    **106 callsites refactor** (30% verbosity reduction per callsite).
+- **D-AUTO.0** (Finding #11):
+  - ``@tenant_aware(auto_propagate_from_parent_fk=True)`` opt-in flag.
+    ``pre_save`` signal auto-populates ``tenant_field`` from the first
+    ``ForeignKey`` whose target model is also ``@tenant_aware``.
+    Respects explicit assignment + ``_signal_bypass_var`` D-USU.0
+    isolation. First FK match wins (deterministic).
+  - **Empirical discovery from Counterbook #009-AUTO-PROPAGATE**:
+    HARD REJECT security posture. The validator chain raises
+    ``CrossTenantAccessError`` BEFORE INSERT when the FK parent
+    belongs to a different tenant than the active scope. Documents
+    upstream as Pattern Cluster A Triple-layer defense Layer 3
+    (NOT in ADR-0013 spec; empirically discovered).
+
+### v0.5.4-alpha -- Day 5 cluster (Findings #7 + #8 + #9 + #12 + #13 + items)
+
+- **D-PERF.0** (Finding #8): ``pre_save`` signal chain smoke benchmark
+  (``@pytest.mark.slow``). Empirical baseline: median <200μs local /
+  <50μs strict CI. **No optimization applied**: archaeology revealed
+  Django signals are per-sender (non-tenant-aware models incur zero
+  handler overhead) and ``_signal_bypass_var`` early-return (D-USU.0)
+  is the existing optimization. Pattern Cluster H: empirical baseline
+  before optimization design.
+- **D-PY314.0** (Item-13): Python 3.14 CI matrix support + classifier.
+- **D-DOCS.0** (Findings #7 + #9 + #12 + #13 + items 12 + 14 + 15 +
+  18 + 24 + 27):
+  - ``docs/concepts/security-posture.md`` (NEW): triple-layer
+    defense documented for adopter guide.
+  - ``docs/concepts/adopter-governance.md`` (NEW): adopter
+    ADR-driven governance pattern (Counterbook ADR-0025 / 0026 /
+    0027 example).
+  - ADR-0013 §Mode 3 supplement: ``_unsafe_unscoped`` ×
+    ``auto_propagate`` interaction (KG-013 doc gap, Item-27).
+  - ``docs/getting-started.md``: pip-only install path + Windows
+    multi-Python troubleshooting + ``ensurepip`` bootstrap.
+  - ``mkdocs.yml``: ADR-0009 + ADR-0010 nav entries (Item-18);
+    Concepts nav extended.
+
+### Day 6 cluster (Findings #3 + #4; consolidated into v0.6.0-alpha)
+
+- **D-NEST.0 SKIPPED** per Rule 70 archaeology. Finding #9 already
+  cleared by D-DOCS.0 §Mode 3 supplement + 3 existing nested-scope
+  unit tests + ``AmbiguousTenantContextError``.
+- **D-MIG.0** (Finding #3) + **D-ADM.0** (Finding #4) shipped in a
+  combined commit per Pattern Cluster H pragmatic atomicity (``__init__.py``
+  interleaved exports prevented clean atomic split).
+  - ``tenantshield.adapters.django.migrations`` module: ``TenantAwareModelMetadata``
+    + ``tenant_aware_models()`` + ``get_model_metadata()`` introspection
+    API for migrations / management commands / audit dashboards.
+  - ``TenantAwareAdmin`` Django admin mixin: auto-prepends the
+    registered ``tenant_field`` to ``list_filter``. Defensive fallback
+    for non-tenant-aware models.
+  - Empirical fix: ``_tenantshield_auto_propagate_from_parent_fk``
+    class attribute added (D-AUTO.0 had stored state only via signal
+    connection; D-MIG.0 introspection now reads consistently).
+
+### Day 7 closure (this release)
+
+- **D-DIST.0** (Item-20): TestPyPI publish workflow via Trusted
+  Publishing OIDC (``.github/workflows/publish-testpypi.yml``).
+  Triggers on tag push.
+- **Item-26**: ``tenant_scope_for_company`` top-level re-export
+  decision -- deferred to Phase 7+ (adapter-specific surface preserved).
+- **ADR-0014**: Phase 6 retrospective (7 Pattern Clusters + Rules 74-78).
+- **CHANGELOG**: this entry.
+- ``__version__`` bumped ``0.5.4a0 → 0.6.0a0`` per Rule 49 P1
+  (5th canonical Phase root application).
+
+### Public surface additions (Phase 6 cumulative)
+
+- ``tenantshield.adapters.django.UnsafeUnscopedManager``
+- ``tenantshield.adapters.django.UnsafeUnscopedQuerySet``
+- ``tenantshield.adapters.django.TenantAwareAdmin``
+- ``tenantshield.adapters.django.TenantAwareModelMetadata``
+- ``tenantshield.adapters.django.tenant_aware_models``
+- ``tenantshield.adapters.django.get_model_metadata``
+- ``tenantshield.adapters.django.tenant_scope_for_company``
+- ``tenantshield.AuditEventType.ENFORCEMENT_BYPASS``
+- ``@tenant_aware(audit_cross_tenant_attempts=...)``
+- ``@tenant_aware(auto_propagate_from_parent_fk=...)``
+
+### Counterbook coordination summary
+
+| Cycle | Trigger | Counterbook scope | Outcome |
+|---|---|---|---|
+| #007-KG003 | ``v0.5.1-alpha`` | KG-003 refactor + ADR-0025 | APPROVED (>10x perf gain) |
+| #008-CTA-AUDIT | ``v0.5.2-alpha`` | ADR-0026 (17 Tier 1+2 models) | APPROVED (~0 events/month) |
+| #009-AUTO-PROPAGATE | ``v0.5.3-alpha`` | ADR-0027 + 5 callsites + 106 DX refactors | APPROVED (HARD REJECT discovery) |
+| #010 | ``v0.5.4-alpha`` | Single pin-bump commit | APPROVED (saturation indicator) |
+
+### Item closure
+
+Resolved this release: 20 (D-DIST.0), 26 (top-level re-export defer).
+Deferred (Counterbook-side or future): 21, 22, 23, 25, 28.
 
 ## [0.5.0-alpha] -- 2026-05-18
 
