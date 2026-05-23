@@ -1,0 +1,53 @@
+name: Publish to TestPyPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Trusted Publishing via OIDC; no PyPI API token in repository secrets.
+# Setup: register a pending publisher at
+# https://test.pypi.org/manage/account/publishing/ with the workflow
+# filename above and repository "Jhoelperaltap/tenantshield".
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          python-version: "3.13"
+      - run: uv sync --all-extras --dev
+      - run: uv build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  publish-testpypi:
+    name: Publish to TestPyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/tenantshield/
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: dist
+          path: dist/
+      - name: Publish distributions to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true

@@ -4,7 +4,26 @@
 
 The supported install paths during the alpha series:
 
-### From the GitHub tag (recommended for adopters)
+### From TestPyPI (recommended for cohort adopters from v0.6.0-alpha onward)
+
+```bash
+pip install --index-url https://test.pypi.org/simple/ \
+            --extra-index-url https://pypi.org/simple/ \
+            tenantshield
+```
+
+Or with `uv`:
+
+```bash
+uv add tenantshield --index https://test.pypi.org/simple/
+```
+
+The TestPyPI publication is automated via GitHub Actions on each tag
+push (see [`.github/workflows/publish-testpypi.yml`](https://github.com/Jhoelperaltap/tenantshield/blob/main/.github/workflows/publish-testpypi.yml)).
+Until `v1.0.0` ships to public PyPI, TestPyPI is the canonical
+distribution channel for alpha releases.
+
+### From a GitHub tag (alternative for pre-`v0.6.0-alpha` versions)
 
 ```bash
 pip install git+https://github.com/Jhoelperaltap/tenantshield.git@v0.5.4-alpha

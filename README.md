@@ -79,10 +79,12 @@ import-time monkey-patching.
 
 ## Status
 
-🟢 **Alpha** — version `0.5.0a0`. The architectural arc from foundation
-through production hardening is complete (Phases 0 → 5). Distribution is
-currently via local wheel/sdist to a validation cohort; public PyPI
-distribution is planned after cohort feedback.
+🟢 **Alpha** — version `0.6.0a0`. The architectural arc from foundation
+through production hardening + first cohort-validated maturity is
+complete (Phases 0 → 6). Distribution from `v0.6.0-alpha` onward
+ships to TestPyPI on every tag (`pip install --index-url
+https://test.pypi.org/simple/ tenantshield`); public PyPI distribution
+is planned after broader cohort feedback.
 
 ## Features
 
