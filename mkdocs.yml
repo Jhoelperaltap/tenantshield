@@ -54,6 +54,7 @@ nav:
     - "0008 - Middleware lifecycle design (SQLAlchemy)": adr/0008-middleware-lifecycle-design.md
     - "0011 - Observability architecture": adr/0011-observability-architecture.md
     - "0012 - Audit-observability dual-pattern": adr/0012-audit-dual-pattern.md
+    - "0013 - Three-mode read/write semantics": adr/0013-three-mode-read-write-semantics.md
 
 markdown_extensions:
   - admonition
