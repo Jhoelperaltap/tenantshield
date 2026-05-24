@@ -55,6 +55,12 @@ jobs:
           # unsatisfiable.
           - python-version: "3.11"
             django-version: "6.0"
+          # Django 4.2 LTS predates Python 3.14; django/template/context.py:39
+          # raises AttributeError on Python 3.14's super() / __dict__ semantics.
+          # Upstream issue (not TenantShield code; 10/11 matrix cells pass).
+          # See ADR-0003: Django 4.2 LTS commitment preserved for py3.11-3.13.
+          - python-version: "3.14"
+            django-version: "4.2"
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v8.1.0
