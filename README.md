@@ -274,8 +274,8 @@ Runnable adopter examples lives in [`examples/`](examples/):
 - **0 architectural BLOCKERs** in Phase 5 (best Phase profile sustained from
   Phase 4).
 
-See the [Roadmap](TENANTSHIELD_ROADMAP.md) (in Spanish) for the full
-governance document.
+See the [Documentation](https://jhoelperaltap.github.io/tenantshield/) for
+comprehensive guides, API reference, and architectural decisions.
 
 ## License
 
