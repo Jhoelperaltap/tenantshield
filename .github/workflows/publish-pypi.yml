@@ -1,0 +1,60 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Trusted Publishing via OIDC; no PyPI API token in repository secrets.
+# Setup (one-time, browser):
+#   1. Register a pending publisher at
+#      https://pypi.org/manage/account/publishing/ with:
+#        - PyPI project name: tenantshield
+#        - Owner: Jhoelperaltap
+#        - Repository name: tenantshield
+#        - Workflow filename: publish-pypi.yml
+#        - Environment name: pypi
+#   2. In GitHub repo Settings -> Environments, create environment "pypi".
+#      (Optional: add required reviewers if you want a manual gate before
+#      every public publish; without reviewers it auto-publishes on tag push.)
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          python-version: "3.13"
+      - run: uv sync --all-extras --dev
+      - run: uv build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-pypi
+          path: dist/
+          retention-days: 7
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/tenantshield/
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: dist-pypi
+          path: dist/
+      - name: Publish distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true

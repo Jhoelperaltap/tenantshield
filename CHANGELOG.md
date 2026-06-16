@@ -9,6 +9,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 (No pending entries.)
 
+## [0.7.0-beta] -- 2026-06-02 (First public PyPI release, Beta status)
+
+First release published to **public PyPI** (paralelo TestPyPI). Version
+bump `0.6.1-alpha` → `0.7.0-beta` reflects the empirical maturity reached
+during the post-Phase-6 reference-adopter validation window: Counterbook
+integrated TenantShield across 6 consecutive Sprint cycles (Sprint 5 → 10)
+totaling ~196 commits with **0 architectural findings introduced**, while
+shipping multi-currency Foundation + Completion arcs (ECB FX, revaluation
+engine, cross-currency reconciliation) on top of the `v0.6.1-alpha` pin
+that remained stable throughout.
+
+The bump is **not arbitrary**: it formalizes the maturity transition from
+alpha (architectural arc shipping; API may change) to beta (architectural
+arc complete; API stable; gaps documented as roadmap). A `v1.0.0` stable
+GA release remains gated on a second adapter validated in production and
+the Phase 7 architectural items (#31-#36) closed.
+
+### Public distribution
+
+- New GitHub Actions workflow `publish-pypi.yml` (paralelo
+  `publish-testpypi.yml` operativo desde `v0.6.0-alpha`) publishes to
+  https://pypi.org/project/tenantshield/ on every `v*` tag, via Trusted
+  Publishing (OIDC) — no PyPI API tokens stored in repo secrets.
+- Install with `pip install --pre tenantshield` (the `--pre` flag is
+  required because `pip` does not install pre-releases by default; this
+  is intentional — beta users opt in explicitly).
+- TestPyPI distribution continues in parallel for release-candidate
+  testing during the beta window.
+
+### Honesty fixes (pre-publication)
+
+- **README.md `## Status`** section rewritten: Alpha → Beta, version
+  `0.6.0a0` → `0.7.0b0`, adopter validation scope spelled out (Django
+  validated production via Counterbook; SA/DRF functional with documented
+  gaps; Celery on roadmap, not shipped), `v1.0.0` GA criteria stated.
+- **README.md `### Framework adapters`** section now per-adapter honest:
+  Django marked validated-in-production with cohort context; DRF marked
+  functional with expanding coverage; SA marked functional with Phase 7
+  gaps linked to known-limitations section.
+- **`docs/adapters/index.md`** rewritten with status matrix
+  (Django ✅ / SA 🔵 / DRF 🔵 / middleware ✅ / strategies ✅) +
+  explicit "Known limitations (SQLAlchemy, Phase 7)" section linking
+  Items 31 (`_unsafe_unscoped` parity) and 32
+  (`auto_propagate_from_parent_fk` parity) +
+  "Roadmap / Planned" section explicitly documenting Celery as not yet
+  shipped (replaces the prior pre-Phase-2 "**Phase 4** — Celery"
+  promise which had no implementation in `src/tenantshield/adapters/`).
+- **`pyproject.toml`** classifier updated `Development Status :: 3 - Alpha`
+  → `Development Status :: 4 - Beta` so PyPI catalog reflects the
+  declared maturity level.
+
+### Cohort validation summary (informational, not new work)
+
+The empirical evidence supporting the alpha → beta transition:
+
+- **6 consecutive Sprint cycles** of zero TenantShield findings introduced
+  during Counterbook architectural work (Sprint 5 + 6 + 7 + 8 + 9 + 10).
+- **196 cumulative Counterbook commits** integrating TenantShield with
+  multi-currency, revaluation, cross-currency reconciliation, encryption
+  layer, reports subsystem — none of which required upstream TenantShield
+  bug fixes.
+- **TenantShield pin stable on `v0.6.1-alpha`** throughout the validation
+  window — no version churn from upstream bugs.
+- **SOC2 audit posture validated** in adopter production: SC-13
+  (Cryptographic Protection) + AT-REST (Data at Rest Encryption) + CC6.1
+  (Logical Access) all MET via the adopter's encryption layer composed
+  BELOW the `@tenant_aware` decorator surface (Pattern recognition:
+  TenantShield governance + adopter cross-cutting concerns are composable
+  independently).
+- **Cross-project pattern crystallization**: Counterbook explicitly named
+  a pattern (Patrón AB "TenantShield queryset pre-emption") referencing
+  the TenantShield queryset manager as a 1st-defense layer in its own
+  2-layer defense pattern (TenantShield governance + service envelope),
+  with an `EnvelopeError ∪ DoesNotExist` union test pattern recognizing
+  both layers. This is the first explicit cross-project architectural
+  recognition of TenantShield governance as a downstream architectural
+  primitive.
+
+### Out of scope for this release
+
+The following remain Phase 7+ candidates and are **not** addressed by
+the alpha → beta version bump:
+
+- Item 31 — SA `_unsafe_unscoped` parity.
+- Item 32 — SA `auto_propagate_from_parent_fk` parity.
+- Item 33 — SA `audit_cross_tenant_attempts` soft-mode.
+- Item 34 — Cross-adapter parity matrix expansion as new adapters ship.
+- Item 35 — ADR-0003 supersedure decision (Django version constraint policy).
+- Item 36 — CLAUDE.md refresh (Phase 0 → Phase 6.1 update).
+
 ## [0.6.1-alpha] -- 2026-05-23 (Phase 6.1 polish layer)
 
 Polish + cross-adapter parity hotfix layer (Path γ + α hybrid) consolidating

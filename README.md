@@ -79,24 +79,36 @@ import-time monkey-patching.
 
 ## Status
 
-🟢 **Alpha** — version `0.6.0a0`. The architectural arc from foundation
+🔵 **Beta** — version `0.7.0b0`. The architectural arc from foundation
 through production hardening + first cohort-validated maturity is
-complete (Phases 0 → 6). Distribution from `v0.6.0-alpha` onward
-ships to TestPyPI on every tag (`pip install --index-url
-https://test.pypi.org/simple/ tenantshield`); public PyPI distribution
-is planned after broader cohort feedback.
+complete (Phases 0 → 6). The Django adapter is **validated in production**
+by a reference adopter (Counterbook, ~196 commits over 6 sprint cycles,
+0 architectural findings introduced). SQLAlchemy and DRF adapters are
+**functional with known limitations** documented in the [adapters guide](docs/adapters/index.md);
+Celery integration is on the [roadmap](docs/adapters/index.md#roadmap--planned),
+not yet shipped.
+
+Distribution: install from PyPI with `pip install --pre tenantshield`
+(pre-releases require `--pre`; `pip install tenantshield` without `--pre`
+will not install beta versions). TestPyPI continues in parallel for
+release-candidate testing. A `v1.0.0` stable GA release is planned once
+a second adapter is validated in production and the Phase 7 architectural
+gaps are closed.
 
 ## Features
 
 ### Framework adapters
 
-- **Django ORM + Django REST Framework**: `tenant_aware` manager + signal
-  enforcement + DRF triple defense (permissions + viewset mixin + serializer
-  validation) + `TenantContextMiddleware`.
-- **SQLAlchemy 2.x sync + async**: `@tenant_aware` declarative decorator +
-  event-based write enforcement (`before_insert` / `before_update` /
-  `before_delete`) + read filtering via `do_orm_execute` + scope managers
-  (`SessionScope` / `AsyncSessionScope`).
+- **Django ORM** *(validated in production by reference adopter, 6 sprint cycles, 0 findings)*:
+  `tenant_aware` manager + signal enforcement + `TenantContextMiddleware`.
+- **Django REST Framework** *(functional; test coverage expanding)*:
+  triple defense (permissions + viewset mixin + serializer validation).
+- **SQLAlchemy 2.x sync + async** *(functional; Phase 7 gaps documented —
+  `_unsafe_unscoped` and `auto_propagate_from_parent_fk` parity with Django
+  pending; see [Known Limitations](docs/adapters/index.md#known-limitations-sqlalchemy-phase-7))*:
+  `@tenant_aware` declarative decorator + event-based write enforcement
+  (`before_insert` / `before_update` / `before_delete`) + read filtering via
+  `do_orm_execute` + scope managers (`SessionScope` / `AsyncSessionScope`).
 - **ASGI middleware**: `TenantSessionMiddleware` (sync ctx mgr with dual-mode
   resolver) + `AsyncTenantSessionMiddleware` (async-native; Phase 5A) for
   FastAPI / Starlette / any ASGI 3.0 framework.
