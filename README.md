@@ -84,8 +84,8 @@ through production hardening + first cohort-validated maturity is
 complete (Phases 0 → 6). The Django adapter is **validated in production**
 by a reference adopter (Counterbook, ~196 commits over 6 sprint cycles,
 0 architectural findings introduced). SQLAlchemy and DRF adapters are
-**functional with known limitations** documented in the [adapters guide](docs/adapters/index.md);
-Celery integration is on the [roadmap](docs/adapters/index.md#roadmap--planned),
+**functional with known limitations** documented in the [adapters guide](https://jhoelperaltap.github.io/tenantshield/adapters/);
+Celery integration is on the [roadmap](https://jhoelperaltap.github.io/tenantshield/adapters/#roadmap--planned),
 not yet shipped.
 
 Distribution: install from PyPI with `pip install --pre tenantshield`
@@ -105,7 +105,7 @@ gaps are closed.
   triple defense (permissions + viewset mixin + serializer validation).
 - **SQLAlchemy 2.x sync + async** *(functional; Phase 7 gaps documented —
   `_unsafe_unscoped` and `auto_propagate_from_parent_fk` parity with Django
-  pending; see [Known Limitations](docs/adapters/index.md#known-limitations-sqlalchemy-phase-7))*:
+  pending; see [Known Limitations](https://jhoelperaltap.github.io/tenantshield/adapters/#known-limitations-sqlalchemy-phase-7))*:
   `@tenant_aware` declarative decorator + event-based write enforcement
   (`before_insert` / `before_update` / `before_delete`) + read filtering via
   `do_orm_execute` + scope managers (`SessionScope` / `AsyncSessionScope`).
@@ -212,7 +212,7 @@ Outside a tenant scope, the same evaluation returns
 `Deny(reason="No tenant context active for read on 'app.Invoice'")`.
 
 For framework-specific quickstarts (Django, SQLAlchemy + FastAPI,
-SQLAlchemy + Flask), see the [Adapters documentation](docs/adapters/index.md)
+SQLAlchemy + Flask), see the [Adapters documentation](https://jhoelperaltap.github.io/tenantshield/adapters/)
 and the [Examples](#examples) below.
 
 ### Enable observability (Phase 5, opt-in)
@@ -224,42 +224,42 @@ configure(emit_events=True)
 ```
 
 Disabled by default — the gate adds `~6 ns/call` when off and zero log
-volume. See [Observability Quick Start](docs/observability/quick-start.md)
+volume. See [Observability Quick Start](https://jhoelperaltap.github.io/tenantshield/observability/quick-start/)
 for adopter integration patterns.
 
 ## Documentation
 
-- **[Getting Started](docs/getting-started.md)** — install + minimal example.
-- **[Concepts](docs/concepts/index.md)** — building blocks (TenantContext,
+- **[Getting Started](https://jhoelperaltap.github.io/tenantshield/getting-started/)** — install + minimal example.
+- **[Concepts](https://jhoelperaltap.github.io/tenantshield/concepts/)** — building blocks (TenantContext,
   policies, audit bus, registry).
-- **[API Reference](docs/api/index.md)** — complete public surface.
-- **[Adapters](docs/adapters/index.md)** — Django + SQLAlchemy + middleware
+- **[API Reference](https://jhoelperaltap.github.io/tenantshield/api/)** — complete public surface.
+- **[Adapters](https://jhoelperaltap.github.io/tenantshield/adapters/)** — Django + SQLAlchemy + middleware
   integration guides.
-- **Observability** ([docs/observability/](docs/observability/)):
-  - [Quick Start](docs/observability/quick-start.md) — enable emission +
+- **Observability**:
+  - [Quick Start](https://jhoelperaltap.github.io/tenantshield/observability/quick-start/) — enable emission +
     configure structlog.
-  - [Dual-Pattern](docs/observability/dual-pattern.md) — audit bus +
+  - [Dual-Pattern](https://jhoelperaltap.github.io/tenantshield/observability/dual-pattern/) — audit bus +
     observability semantics.
-  - [Async Middleware Migration](docs/observability/async-middleware-migration.md)
-  - [Production Checklist](docs/observability/production-checklist.md)
-  - [OpenTelemetry integration](docs/observability/integration/opentelemetry.md)
-  - [Prometheus integration](docs/observability/integration/prometheus.md)
-- **[Architectural Decision Records](docs/adr/)** — 12 ADRs documenting
+  - [Async Middleware Migration](https://jhoelperaltap.github.io/tenantshield/observability/async-middleware-migration/)
+  - [Production Checklist](https://jhoelperaltap.github.io/tenantshield/observability/production-checklist/)
+  - [OpenTelemetry integration](https://jhoelperaltap.github.io/tenantshield/observability/integration/opentelemetry/)
+  - [Prometheus integration](https://jhoelperaltap.github.io/tenantshield/observability/integration/prometheus/)
+- **[Architectural Decision Records](https://github.com/Jhoelperaltap/tenantshield/tree/main/docs/adr)** — 14 ADRs documenting
   design decisions.
-- **[Changelog](CHANGELOG.md)** — release history with detailed Decision
+- **[Changelog](https://github.com/Jhoelperaltap/tenantshield/blob/main/CHANGELOG.md)** — release history with detailed Decision
   Records per phase.
 
 ## Examples
 
-Runnable adopter examples lives in [`examples/`](examples/):
+Runnable adopter examples lives in [`examples/`](https://github.com/Jhoelperaltap/tenantshield/tree/main/examples):
 
-- **[FastAPI + SQLAlchemy](examples/02_sqlalchemy/fastapi/)** — async ASGI
+- **[FastAPI + SQLAlchemy](https://github.com/Jhoelperaltap/tenantshield/tree/main/examples/02_sqlalchemy/fastapi)** — async ASGI
   application with `TenantSessionMiddleware`.
-- **[Flask + SQLAlchemy](examples/02_sqlalchemy/flask/)** — sync WSGI
+- **[Flask + SQLAlchemy](https://github.com/Jhoelperaltap/tenantshield/tree/main/examples/02_sqlalchemy/flask)** — sync WSGI
   application with `TenantSessionMiddlewareWSGI`.
-- **[CLI + SQLAlchemy](examples/02_sqlalchemy/cli/)** — framework-agnostic
+- **[CLI + SQLAlchemy](https://github.com/Jhoelperaltap/tenantshield/tree/main/examples/02_sqlalchemy/cli)** — framework-agnostic
   background-worker pattern with `SessionScope`.
-- **[Django adopter starter](examples/01_django/)** — Django project
+- **[Django adopter starter](https://github.com/Jhoelperaltap/tenantshield/tree/main/examples/01_django)** — Django project
   template wired with TenantShield middleware + admin.
 
 ## Compatibility
@@ -289,4 +289,4 @@ comprehensive guides, API reference, and architectural decisions.
 
 ## License
 
-Released under the [Apache License 2.0](LICENSE).
+Released under the [Apache License 2.0](https://github.com/Jhoelperaltap/tenantshield/blob/main/LICENSE).

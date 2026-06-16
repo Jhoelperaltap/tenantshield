@@ -9,6 +9,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 (No pending entries.)
 
+## [0.7.0b2] -- 2026-06-16 (README links work on PyPI rendering)
+
+Patch release of the `0.7.0-beta` line. Same code surface as `0.7.0b1`;
+only the rendered README on the PyPI project page changes.
+
+### Documentation
+
+- **README all documentation + examples links converted from relative
+  paths to absolute URLs.** The PyPI project page renders the package
+  README directly; relative links like `docs/getting-started.md`
+  resolve against `https://pypi.org/project/tenantshield/`, producing
+  404 errors on every documentation and example link. Reported by user
+  navigation through the PyPI project page.
+
+  Mapping applied:
+  - `docs/<path>.md` -> `https://jhoelperaltap.github.io/tenantshield/<path>/`
+    (mkdocs docs site, live since `v0.6.0-alpha` -- empirically
+    verified HTTP 200 for each target).
+  - `docs/adr/` -> `https://github.com/Jhoelperaltap/tenantshield/tree/main/docs/adr`
+    (ADRs are not in the mkdocs nav, so the GitHub tree view is the
+    correct destination).
+  - `examples/<path>/` -> `https://github.com/Jhoelperaltap/tenantshield/tree/main/examples/<path>`
+    (runnable examples live in the repo, not the docs site).
+  - `CHANGELOG.md` -> `https://github.com/Jhoelperaltap/tenantshield/blob/main/CHANGELOG.md`.
+  - `LICENSE` -> `https://github.com/Jhoelperaltap/tenantshield/blob/main/LICENSE`.
+
+  In-repo navigation on GitHub still works because GitHub resolves
+  absolute URLs the same way as PyPI; only the previously-broken PyPI
+  path is fixed.
+
+- ADR count in the documentation index corrected `12 ADRs` -> `14 ADRs`
+  (matches actual `docs/adr/` count post Phase 6 retrospective ADR-0013
+  + ADR-0014).
+
+### Out of scope
+
+- No code surface changes; public API is byte-for-byte identical to
+  `0.7.0b1`. This is a pure README rendering fix.
+- No dependency changes; lockfile unchanged.
+
 ## [0.7.0b1] -- 2026-06-16 (CVE security fixes + Install instructions corrected)
 
 Patch release of the `0.7.0-beta` line. Ships the dependency security
