@@ -9,7 +9,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 (No pending entries.)
 
-## [0.7.0-beta] -- 2026-06-02 (First public PyPI release, Beta status)
+## [0.7.0b1] -- 2026-06-16 (CVE security fixes + Install instructions corrected)
+
+Patch release of the `0.7.0-beta` line. Ships the dependency security
+fixes that were committed (`71b2a5e`) after `v0.7.0-beta` was published
+to PyPI but before any user could install a fixed artifact -- the
+`0.7.0b0` wheel on PyPI still carries the pre-fix constraints. This
+release publishes a wheel that actually allows installation of the
+patched upstream packages.
+
+### CVE security fixes (paralelo CI security workflow restoration)
+
+`pip-audit` against the `0.7.0b0` lockfile reported 18 known CVEs across
+4 upstream dependencies. All cleared in this release:
+
+- **django** 6.0.5 -> 6.0.6 -- PYSEC-2026-197, 198, 199, 200, 201
+  (5 CVEs). Constraint widened `<6.0.6` -> `<6.0.7` in both the
+  `[django]` extra and `[dev]` section (paralelo to the `9e4e126`
+  precedent from Phase 6 Day 2-3 where `<6.0.5` was widened to
+  `<6.0.6`). ADR-0003 Django 4.2 LTS commitment preserved -- the
+  widening only permits the 6.0.6 fix release.
+
+- **pyjwt** 2.12.1 -> 2.13.0 -- PYSEC-2026-175, 176, 177, 178, 179
+  (5 CVEs). Within the existing `<3.0` constraint; lockfile-only
+  refresh.
+
+- **starlette** 1.0.1 -> 1.3.1 -- CVE-2026-48817, 48818, 54282, 54283
+  (4 CVEs). Transitive via fastapi; lockfile-only refresh.
+
+- **pip** 26.1.1 -> 26.1.2 -- PYSEC-2026-196 (1 CVE). Runner CI dev
+  environment, no runtime impact on the package, but updated for
+  hygiene.
+
+### Test infrastructure accommodation
+
+- **`filterwarnings` ignore added for
+  `starlette.exceptions.StarletteDeprecationWarning`**: starlette 1.3.x
+  emits this warning when `TestClient` is used with `httpx`
+  (recommending `httpx2`, pydantic's successor). The warning is
+  informational -- `TestClient` with `httpx` keeps working in the 1.3.x
+  line. Without this ignore the strict `filterwarnings = ["error"]`
+  policy blocks pytest collection. Migration to `httpx2` is declared
+  tech debt, evaluated when starlette actually removes httpx support
+  (expected `starlette 2.0`).
+
+### Documentation
+
+- **README `## Install` section rewritten**: the prior section described
+  a "Stage 1 -- Local wheel distribution" workflow with hard-coded
+  `0.5.0a0` filenames and a "Stage 2 -- PyPI distribution (upcoming)"
+  placeholder, both of which became stale once `v0.7.0-beta` shipped
+  publicly. Replaced with the actual public install commands
+  (`pip install --pre tenantshield` + adapter extras + TestPyPI
+  fallback). The post-`v1.0.0` install command (without `--pre`) is
+  noted as the future state.
+
+### Out of scope
+
+- `httpx2` migration (tech debt, deferred until starlette removes
+  httpx support).
+- No code surface changes; the public API is byte-for-byte identical
+  to `0.7.0b0`. This is a constraints + docs patch.
+
+## [0.7.0-beta] -- 2026-06-16 (First public PyPI release, Beta status)
 
 First release published to **public PyPI** (paralelo TestPyPI). Version
 bump `0.6.1-alpha` → `0.7.0-beta` reflects the empirical maturity reached

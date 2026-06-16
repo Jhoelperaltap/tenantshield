@@ -144,34 +144,32 @@ gaps are closed.
 
 ## Install
 
-### Stage 1 — Local wheel distribution
-
-TenantShield is currently distributed via local wheel/sdist artifacts to a
-validation cohort. To build and install from the repository:
+TenantShield is published to public PyPI as a beta pre-release. Use the
+`--pre` flag because `pip` does not install pre-releases by default:
 
 ```bash
-uv build
-pip install dist/tenantshield-0.5.0a0-py3-none-any.whl
-```
-
-Or install a provided wheel artifact directly:
-
-```bash
-pip install tenantshield-0.5.0a0-py3-none-any.whl
+pip install --pre tenantshield
 ```
 
 Adapter-specific extras:
 
 ```bash
-pip install "tenantshield[django]"       # Django + DRF adapter
-pip install "tenantshield[sqlalchemy]"   # SQLAlchemy adapter
-pip install "tenantshield[jwt]"          # JWT strategy support
-pip install "tenantshield[drf]"          # Django REST Framework adapter
+pip install --pre "tenantshield[django]"       # Django + DRF adapter
+pip install --pre "tenantshield[sqlalchemy]"   # SQLAlchemy adapter
+pip install --pre "tenantshield[jwt]"          # JWT strategy support
+pip install --pre "tenantshield[drf]"          # Django REST Framework adapter
+pip install --pre "tenantshield[all]"          # all adapters at once
 ```
 
-### Stage 2 — PyPI distribution (upcoming)
+TestPyPI continues in parallel for release-candidate testing:
 
-Public PyPI distribution is planned after validation cohort feedback.
+```bash
+pip install --pre --index-url https://test.pypi.org/simple/ \
+    --extra-index-url https://pypi.org/simple/ tenantshield
+```
+
+Once `v1.0.0` ships, `pip install tenantshield` (without `--pre`) will
+prefer the stable release automatically.
 
 ## Quickstart
 
