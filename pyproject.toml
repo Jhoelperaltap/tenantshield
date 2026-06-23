@@ -38,7 +38,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "structlog>=25.0,<26.0",
+    "structlog>=25.0,<27.0",
 ]
 
 [project.optional-dependencies]
